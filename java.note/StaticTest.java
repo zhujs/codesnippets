@@ -1,3 +1,6 @@
+// import static package.classname.*
+// The static import construct allows unqualified access to static members without inheriting from the type containing the static members.
+
 public class StaticTest {
     /*
         All the static "statements" will be executed in the declaration order
