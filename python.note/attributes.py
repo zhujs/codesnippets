@@ -65,11 +65,20 @@ print objNonData.nonDataDesc # step 4
 # User-defined function in class is a non-data descriptor.
 # we can hide it using a function (step 3)
 
-# https://docs.python.org/2/reference/datamodel.html#new-style-special-lookup 
-# For magic function, however, it will call C.__len__ function
+# Implicit invocations of special methods are only guaranteed to work 
+# correctly if defined on an object’s type, not in the object’s instance 
+# dictionary. 
+
 # If it did go to the instance then even something like str(C) 
 # (str of the class C) would go to C.__str__(), which is a method
 # defined for an instance of C, and not C itself
+
+# Implicit special method lookup generally also bypasses the 
+# __getattribute__() method even of the object’s metaclass
+
+# More information in:
+#   https://docs.python.org/2/reference/datamodel.html#new-style-special-lookup 
+
 class C(object):
     def __len__(self):
         return 0
@@ -80,7 +89,8 @@ def mylen():
     return 1
 
 cobj.__len__ = mylen
-print len(cobj) # always invokes C.__len__() 
+print cobj.__len__() # invokes cobj.__dict__.__len__() (mylen) 
+print len(cobj) # always invokes C.__dict__.__len__() 
 
 """
 # solution:
