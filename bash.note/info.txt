@@ -1,0 +1,18 @@
+
+# info命令用来查询INFO格式的帮助文档（通常位于/usr/share/info/目录）。
+# INFO格式的文档由多个结点组成
+
+空格键          向下翻一页
+[Page Down]     向下翻一页
+[Page Up]       向上翻一页
+[tab]           在 node 之间移动，有 node 的地方，通常会以 * 显示。
+[Enter]         当光标在 node 上面时，按下 Enter 可以进入该 node 。
+b               移动光标到该 info 画面当中的第一个 node 处
+e               移动光标到该 info 画面当中的最后一个 node 处
+n               前往下一个 node 处
+p               前往上一个 node 处
+u               向上移动一层
+s(/)        	在 info page 当中进行搜寻
+h           	显示求助菜单
+?           	命令一览表
+q           	结束这次的 info page
