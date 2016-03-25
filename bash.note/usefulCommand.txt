@@ -1,0 +1,33 @@
+# sync the network time
+sudo ntpdate clepsydra.de.com 
+
+
+# modify the host name
+sudo hostname newMechineName
+sudo vi /etc/hostname
+sudo vi /etc/hosts
+
+
+# check uuid
+sudo ls -l /dev/disk/by-uuid
+suo blkid
+
+
+# convert encoding recursively
+find . -type f -exec iconv -f GBK -t UTF-8 {} -o {} \;
+
+
+#返回前一个工作路径
+cd - 
+
+
+# convert file name encoding
+convmv -f gb2312 -t utf-8 *
+
+
+# list available signal
+kill -l 
+
+
+# 将$HOME/src/目录下面的所有文件，复制到远程主机的$HOME/src/目录
+cd && tar czv src | ssh user@host 'tar xz'

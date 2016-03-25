@@ -1,0 +1,57 @@
+磁盘分区完毕后需要进行格式化，以成为操作系统可以利用的文件系统；
+
+Linux常用的文件系统为Ext2 (Linux second extended file system), Ext3, Ext4，通常来说，一个可被挂载的文件系统不一定是一个分区（LVM，RAID）。
+
+Ext2文件系统的分析：
+
+Block Group使得更易于管理inode与datablock，文件系统在格式化时已规划好inode与block的数量，重新格式化或使用resize2fs等命令更改文件系统大小；
+
+     +-------+----------+----------+------------------------+
+     | Boot  |   Block  |   Block  |                        |
+     |Sector |  Group1  |  Group2  |   ...                  |
+     +-------+----------+----------+------------------------+
+                    |
+                    |
+                    v     
+           +------------+-------------+------+------+--------+-------+
+           | Superblock | filesystem  | Block|Inode | Inode  | Data  |
+           |            | description | Map  |Map   | Table  | Blocks|
+           +------------+-------------+------+------+--------+-------+
+
+Superblock记录整个filesystem相关信息，使用dumpe2fe命令查看该信息；一般只有第一个Block Group有Superblock，其它的可以作为备份使用；
+
+filesystem description记录了block group 的开始与结束的block号码，以及说明superblock, blockmap, inodemap, data block分别位于哪一个block号码之间。
+
+
+一个文件拥有一个inode(128bytes)；
+系统读取文件先找到inode，分析权限，读取data blocks内容；
+inode使用直接，间接，双间接，三间接的方法索引data blocks（用额外的的data blocks来作索引）；
+若block size为b，一个inode number为4字节，则一个文件最大为（12个直接指针，1个间接、双间接的、三间接指针）：
+	min( ( (b/4)^3 + (b/4)^2 + b/4 + 12 ) * b,  (23^2-1) * 512  )
+
+http://en.wikipedia.org/wiki/Ext2#File_system_limits
+
+inodemap与blockmap分别记录有哪些inode与datablock被使用；
+
+文件的blocks很分散会导致磁盘碎片问题；
+
+
+
+
+日志式文件系统（Ext3, Ext4）：
+文件读写突然断电可能会导致数据一致性问题（inode与data block信息不对应）；
+如果在filesystem当中规划出一个区块，该区块专门记录写入或修订文件时的步骤，就可以简化一致性检查的步骤：
+	预备：当系统要写入一个文件时，会先在日志记录区块中记录某个文件准备要写入的信息；
+	实际写入：开始写入文件的权限与数据；开始升级 metadata 的数据；
+	结束：完成数据与 metadata 的升级后，在日志记录区块当中完成该文件的纪录。
+
+在这样的程序当中，万一数据的纪录过程当中发生了问题，那么我们的系统只要去检查日志记录区块，就可以知道哪个文件发生了问题，针对该问题来做一致性的检查即可，而不必针对整块filesystem去检查， 这样就可以快速修复filesystem
+
+
+Linux使用VFS (virtual file system)读写多个不同的文件系统；
+
+想要知道你的Linux支持的文件系统有哪些：
+	ls -l /lib/modules/$(uname -r)/kernel/fs
+
+系统目前已加载到内存中支持的文件系统则有：
+	cat /proc/filesystems

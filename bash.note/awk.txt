@@ -1,0 +1,170 @@
+1. how to run 'awk' command
+awk [-F fieldSeperator] [-v var=value ...] 'program' [--] \
+	[var=value] [dataFile(s)]
+
+awk [-F fieldSeperator] [-v var=value ...] -f programfile [--] \
+	[var=value] [dataFile(s)]
+
+
+
+2. program structure
+pattern { action }
+
+BEGIN and END are two specific patterns, when multiple BEGIN or END patterns are specified, they are processed in their order in the awk program. 
+
+
+awk [-F fieldSeperator] [-v var=value ...]  -f programfile [--] \
+                                           ^
+                                           |
+                         runs the action associated with BEGIN here
+
+
+3. string and REs
+t = "AB" "CD", then t is "ABCD"
+both "ABC" ~ "^[A-Z]+$" and "ABC" ~ /^[A-Z]+$/  return true
+
+
+4. number
+Numbers in awk are represented as double-precision floating-point value.
+Note that awk's ^ operator (power) is different from C's, despite the similarity of major parts of awk and C
+
+s = "123"
+n = 0 + s , n is a number now
+
+
+5. Scalar Variables and Array Variables
+FNR: Record number in the current input file
+NR:  Record number in the job
+
+Arrays in awk are associative arrays
+	x[1] = 123
+	delete x[1]
+	x = 789 # Error
+
+awk simulates arrays with multiple indices by treating a comma-separated list of indices as a single string (comma will be changed to variable SUBSEP).
+mail[ 53, "ZHU" ]  = mail[ 53 SUBSEP "ZHU"]
+
+
+6. command line arguments and environment variable
+ARGC, ARGV (arrays), ENVIRON (arrays)
+
+awk -v One=1 -v Two=2 -f showargs.awk Three=3 file1
+ARGV[0] is "awk", ARGV[1] is "Three=3"
+
+
+
+7. RS, FS, 
+RS can be set to REs
+difference between FS = "[ ]" and the default FS setting
+echo ' un deux trois  '  | awk -F' ' '{print NF ":" $0 }'
+echo ' un deux trois  '  | awk -F'[ ]' '{print NF ":" $0 }'
+
+For example, ($1 = "alef") changing the value of fields is legal, but has an important side effect: if the complete record is subsequently referenced, it is reassembled from the current values of the fields, but separated by the string given by the output-field-separator built-in variable, OFS, which defaults to a single space. 
+
+
+
+8. one-line program
+awk '{ C += length($0) + 1; W += NF } END { print NR, W C } ' # C is automatically initialed to 0
+
+awk 'rand() < 0.05' file(s)
+
+awk -v COLUMN=n '{sum += $COLUMN} END { print sum }' file(s)
+
+sed -e 's/ /\&/g' file(s)  <===> awk 'BEGIN { FS = "\t"; OFS = "&" } { $1 = $1; print }' file(s)
+
+sort file(s) | uniq  <===> sort file(s) | awk 'Last != $0 {print} {Last = $0 }'
+
+awk 'BEGIN { ORS = " "; RS = "<[^<>]*>" } { print }' *.html # To strip angle-bracketed markup tags from html docs
+
+
+
+9. statement
+
+awk 'BEGIN { for(x=0; x<=1; x+= 0.05) print x }'
+
+for (name in telephone)
+	print name "\t" telephone[name]
+
+# compute integer factorizations of integers supplied one per line
+# Usage:
+# awk -f factorize.awk
+
+{
+	n = int($1)
+	m = n = (n >= 2) ? n : 2
+	factors = ""
+
+	for (k = 2; (m > 1) && (k^2 <= n); )
+	{
+		if (int(m % k) != 0)
+		{
+			k++
+			continue
+		}
+		m /= k
+		factors = (factors =  = "") ? ("" k) : (factors " * " k)
+	}
+	if ( (1 < m) && (m < n))
+		factors = factors " * " m
+
+	print n, (factors =  = "") ? "is prime" : ("= " factors)
+}
+
+
+array works like map in C++
+	if ("Sally" in telephone)
+		not 
+	if (telephone["Sally"] != "" ) # will create a new element
+
+Skip further pattern checking for this record only: 
+	next statement
+Skip further pattern checking for the current input file:
+	nextfile statement <===>  
+	
+		FNR == 1 { SKIPEFILE = "" }	
+		FILENAME == SKIPEFILE {next }
+		...
+		SKIPFILE = FILENAME; next
+
+exit n
+
+
+
+
+10. User input and I/O redirection
+	getline : Read the next record from the current input file into $0, and update NF, NR, and FNR. 
+	getline var : Read the next record from the current input file into var, and update NR and FNR. 
+	getline < file : Read the next record from file into $0, and update NF. 
+	getline var < file : Read the next record from file into var. 
+
+
+command = "head -n 10 /etc/hosts"
+while ( (command | getline s ) > 0 ) # The pipeline is specified in a character string
+	print s
+close( command )
+
+
+print "Hello, world" > file	# output redirection
+
+print "Hello, world" | "sort"	# redirect to pipeline 
+close( "sort" )
+
+
+shell = "/usr/local/bin/ksh"
+print "export INPUTFILE=/var/tmp/myfile.in" | shell
+print "export OUTPUTFILE=/var/tmp/myfile.out" | shell
+print "env | grep PUTFILE" | shell
+close(shell)
+
+
+11. User-defined function
+function gcd (x, y,      r) 
+{
+	x = int(x)
+	y = int(y)
+	print x, y
+	r = x % y
+	return (r=0) ? y: gcd(y, r)
+}
+
+{ g = gcd($1, $2); print "gcd(" $1 ", " $2 ") =", g }
