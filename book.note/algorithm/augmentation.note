@@ -1,0 +1,152 @@
+Augmenting data structures:
+	It's unusual to have to design an all-new data structure from scratch.
+	It’s more common to take a data structure that you know and store additional information in it.
+	With the new information, the data structure can support new operations.
+	But...you have to figure out how to correctly maintain the new information without loss of efficiency.
+
+We’ll look at a couple of situations in which we augment red-black trees.
+
+
+Dynamic order statistics:
+We want to support the usual dynamic-set operations from R-B trees, plus:
+	OS-SELECT(x, i): return pointer to node containing the ith smallest key of the subtree rooted at x.
+	OS-RANK (T, x): return the rank of x in the linear order determined by an inorder walk of T.
+
+Augment by storing in each node x:
+	size[x] = # of nodes in subtree rooted at x .
+		1. Includes x itself.
+		2. Does not include leaves (sentinels).
+		3. Define for sentinel size[nil[T]] = 0.
+
+Then size[x] = size[left[x]] + size[right[x]] + 1
+
+the augmenting RB-Tree:
+                             +--+
+                             |M |
+                             |8 |  B
+                             +--+
+                         /           \
+                        /             \
+                    +--+              +--+
+                  R |C |              |P | B
+                    |5 |              |2 |
+                    +--+              +--+
+                /        \                   \
+               /          \                   \
+           +--+           +--+                 +--+
+        B  |A |         B |Q |                 |Q | R
+           |1 |           |1 |                 |1 |
+           +--+           +--+                 +--+
+                        /     \
+                       /       \
+                     +--+       +--+
+                   R |D |       |H | R
+                     |1 |       |1 |
+                     +--+       +--+
+
+OS-SELECT (x, i)
+	r <- size[ left[x] ] + 1
+	if i = r // r = rank of x within subtree rooted at x
+		then return x
+	else if i < r
+		then return OS-SELECT (left[x], i)
+		else return OS-SELECT (right[x], i − r)
+
+Initial call: OS-SELECT (root[T], i)
+
+OS-R ANK(T, x) // x is the pointer to the node
+	r <- size[left[x]] + 1 
+	y <- x
+	while y != root[T] // search from x to the root
+		do if y = right[ p[y]]
+			then r <- r + size[left[ p[y]] ] + 1
+		y <- p[y] // y is set to the parent
+	return r
+
+Loop invariant: At start of each iteration of while loop, r = rank of key[x] in subtree rooted at y.
+Analysis: y goes up one level in each iteration => O(lg n) time.
+
+
+Maintaining subtree sizes:
+	Need to maintain size[x] fields during insert and delete operations.
+	Need to maintain them efficiently. Otherwise, might have to recompute them all, at a cost of Omega(n).
+
+Insert:
+	During pass downward, we know that the new node will be a descendant of each node we visit, and only of these nodes. Therefore, increment size field of each node visited.
+Goes up the tree.
+	Color changes don't affect subtree sizes. Rotations do!
+                +--+                                              +--+         
+	        |42|                                              |93|         
+                |19| x                                            |19| x       
+                +--+                left-rotate(T,x)              +--+         
+              /      \              ------------->              /      \       
+             /        \                                        /        \      
+            6         +--+                                 +--+          7 
+                      |93|          <--------------        |42|            
+                      |12|          right-rotate(T,x)      |11|            
+                      +--+                                 +--+            
+                     /    \                               /    \           
+                    /      \                             /      \          
+                   4        7                           6        4         
+
+
+Delete: 
+	1. Splice out some node y.
+	2. Fixup.
+After splicing out y, traverse a path y → root, decrementing size in each node on path. O(lg n) time.
+During fixup, like insertion, only color changes and rotations.
+
+
+Methodology for augmenting a data structure
+	1. Choose an underlying data structure.
+	2. Determine additional information to maintain
+	3. Verify that we can maintain additional information for existing data structure modifying operations.
+	4. Develop new operations.
+
+Don’t need to do these steps in strict order! Usually do a little of each, in parallel.
+
+
+
+Theorem:
+Augment a R-B tree with field f, where f[x] depends only on information in x, left[x] and right[x] (including f[left[x]] and f [right[x]]). Then can maintain values of f in all nodes during insert and delete without affecting O(lg n) performance.
+For some attributes, can get away with O(1) per rotation. Example: size field.
+
+
+
+
+Interval trees
+	INTERVAL-INSERT (T, x): int[x] already filled in.
+	INTERVAL-DELETE (T, x)
+	INTERVAL-SEARCH (T, i): return pointer to a node x in T such that int[x] overlaps interval i. Any overlapping node in T is OK. Return pointer to sentinel nil[T ] if no overlapping node in T .
+
+
+Interval i has low[i], high[i].
+	i and j overlap if and only if low[i] ≤ high[ j ] and low[ j ] ≤ high[i].
+
+1. Use R-B trees.
+	Each node x contains interval int[x].
+	Key is low endpoint (low[int[x]]).
+	Inorder walk would list intervals sorted by low endpoint.
+2. Each node x contains
+	max[x] = max endpoint value in subtree rooted at x .
+	max[x] = max{ hith[int[x] ], max[left[x]], max[right[x]] }
+	Could max[left[x]] > max[right[x]]? Sure. Position in tree is determined only by low endpoints, not high endpoints.
+
+3. Maintaining the information.
+	This is easy, max[x] depends only on:
+		information in x: high[int[x]]
+		information in left[x]: max[left[x]]
+		information in right[x]: max[right[x]]
+	Apply the theorem. In fact, can update max on way down during insertion, and in O(1) time per rotation.
+
+4. Developing new operations.
+	INTERVAL-SEARCH (T, i)
+		x <- root[T ]
+		while x = nil[T ] and i does not overlap int[x]
+			do if left[x] = nil[T ] and max[left[x]] ≥ low[i]
+				then x <- left[x]
+				else x <- right[x]
+			return x
+
+Key idea: need check only 1 of node’s 2 children.
+循环不变式：如果树T包含覆盖i的区间，则以x为根的子树必包含此区间（慢慢证明吧。。）

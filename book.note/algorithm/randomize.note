@@ -1,0 +1,104 @@
+The hiring problem Scenario:
+
+HIRE-ASSISTANT(n)
+	best <- 0 //candidate 0 is a least-qualiÞed dummy candidate
+	for i <- 1 to n
+		do interview candidate i
+		   if candidate i is better than candidate best
+			then best <- i
+		             hire candidate i
+Cost: If n candidates, and we hire m of them, the cost is O(n*ci + m*ch).
+
+Have to pay n*ci to interview, no matter how many we hire, So we focus on analyzing the hiring cost m*ch .
+
+This is a model of a common paradigm: we need to find the maximum or minimum in a sequence by examining each element and maintaining a current “winner.” The variable m denotes how many times we change our notion of which element is currently winning.
+
+
+Worst-case analysis
+In the worst case, we hire all n candidates. This happens if each one is better than all who came before. In other words, if the candidates appear in increasing order of quality.
+
+
+Probabilistic analysis:
+In general, we have no control over the order in which candidates appear. We could assume that they come in a random order. This technique requires that we can make a reasonable characterization of the input distribution.（这样就可以利用输入的分布对算法进行改进？）
+
+
+Randomized algorithms:
+We might not know the distribution of inputs, or we might not be able to model it computationally. Instead, we use randomization within the algorithm in order to impose a distribution on the inputs （在算法里面对输入随机化，以产生真正的随机输入，不用依赖输入的分布）.
+
+
+we take control of the process and enforce a random order.
+
+In practice, RANDOM is implemented by a pseudorandom-number generator, which is a deterministic method returning numbers that “look” random and pass statistical tests.
+
+
+Indicator random variables:
+A simple yet powerful technique for computing the expected value of a random
+variable. Helpful in situations in which there may be dependence.
+
+Given a sample space and an event A, we define the indicator random variable:
+		1 if A occurs
+	I{A} =
+		0 if A does not occur
+
+For an event A, let X = I{A}. Then E [X] = Pr{A} (probability of A).
+
+Let X be a random variable for the number of heads in n, how to calculate E[X]??
+
+
+Analysis of the hiring problem:
+Assume that the candidates arrive in a random order. Let X be a random variable that equals the number of times we hire a new assistant.
+
+Define indicator random variables X1, X2, ... , Xn , where:
+	Xi = I{candidate i is hired}
+
+Pr {candidate i is the best so far} = 1/i. ??
+
+E[X] = sum( E[Xi] ) = ln n + O(1) 
+
+
+Randomized algorithms:
+Instead of assuming a distribution of the inputs, we impose a distribution.
+
+RANDOMIZED-HIRE-ASSISTANT(n)
+	randomly permute the list of candidates
+	HIRE-ASSISTANT(n)
+
+The randomization is now in the algorithm, not in the input distribution. Given a particular input, we can no longer say what its hiring cost will be. Each time we run the algorithm, we can get a different hiring cost.
+
+The expected hiring cost of RANDOMIZED-HIRE-ASSISTANT is O(ch*lnn).
+
+Randomly permuting an array:
+Goal: Produce a uniform random permutation (each of the n! permutations is equally likely to be produced).
+
+Non-goal: Show that for each element A[i], the probability that A[i] moves to position j is 1/n. (See Exercise 5.3-4, whose solution is on page 5-13 of this manual.)
+
+
+RANDOMIZE-IN-PLACE(A, n)
+	for i <- 1 to n
+	    do swap A[i] <-> A[RANDOM(i, n)]
+
+RANDOMIZE-IN-PLACE computes a uniform random permutation.
+Proof Use a loop invariant:
+	Loop invariant: Just prior to the ith iteration of the for loop, for each possible (i-1)-permutation, subarray A[1..(i−1)] contains this (i-1)-permutation with probability (n − i + 1)!/n!.
+
+保持循环不变式，在第i次循环时：
+	考虑一个特殊的i排列<x1, x2, x3, ... , xi>	
+	E1表示前i-1迭代已经在A[1..i-1]中构造了此特殊的i-1排列；Pr{E1} = (n-i+1)/n!。E2表示第i次迭代在A[i]里放置了值xi的事件
+	Pr{ E2 | E1 } = 1/(n-i+1) （在剩下的n-i+1个值中选中xi的概率）
+
+	Pr{E2 and E1} = Pr{E2 | E1} * Pr{E1} = (n-i)!/ n!
+
+	此循环不变式得以保持
+
+
+
+
+
+
+
+
+
+
+
+
+

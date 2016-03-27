@@ -1,0 +1,114 @@
+
+Trie tree ,also called digital tree and sometimes radix tree or prefix tree(as they can be searched by prefixes), is an ordered tree data structure that is used to store a dynamic set or associative array where the keys are usually strings. 
+
+wikipedia: http://en.wikipedia.org/wiki/Trie
+
+Trie (reTRIEve)树是一棵度>=2的树，树中的每个结点并不代表一个关键字，而是只含有组成关键字的符号（根结点并不代表任何符号）。Trie树常用于字符串的统计与查询，Trie对中的单链分支可以进行压缩，优化存储空间。
+
+
+双键树存储结构：用孩子兄弟表示法存储Trie树，$符号表示字符串结束
+
+			()                ()
+                      /     \             |
+                   C          L           C ------- L
+                 /  \         |           |         |
+               A     H        A   ===>>   A  - H    A
+               |     |        $           |    |    |
+               $     A                    $    A    $
+                     |                         |
+                     $                         $
+
+typedef struct DLTNode {
+	char symbol;			//结点代表的字符
+	struct DLTNode *next;		//指向兄弟结点
+	NodeKind kind;			//内部结点或叶子结点
+
+	union {
+		Record * infoptr;	//叶子结点的记录指针
+		struct DLTNode *first	//分支结点的孩子指针
+	}
+}DLTNode, *DLTree;
+
+
+Record * SearchDLTree( DLTree T, KeyType K)
+{
+	//在双链树中查找关键字K
+
+	p = T->first; i = 0;
+	while( p&& i< K.num) // K.num为关键字长度（包括$符号）
+	{
+		// 查找关键字的第i位（第i层？）
+		while( p && p->symbol != K.ch[i] ) p = p->next;
+
+		// 当p指向代表$的结点时，i如果为k.num-1，查找成功，p不为NULL
+		if ( p && i<K.num-1 ) p = p -> first;
+		++i;
+	}
+
+	if(!p ) then return NULL;
+	else return p->infoptr;
+}
+
+在双链树中查找每一位的平均查找长度为 1/2 (1+d)，d为关键字的基，若树中所有关键字长度相同，则叶子结点在同一层次，平均查找长度为 h/2 (1+d)，h为树的深度。
+
+多重链表结构：每个结点拥有d个指针域。
+
+                      27个指针域（加上$）
+                      +---------------+
+                      |   |C|   |L|   |
+                      +---------------+
+                           /      \
+             +---------------+      +---------------+ 
+             |A|   |H|       |      |     |A|       | 
+	     +---------------+      +---------------+ 
+              /      \                     |
+          +-----+    +------+           +------+
+          | CA  |    | CHA  |           |  LA  |
+          +-----+    +------+           +------+
+
+
+typedef struct TrieNode {
+        NodeKind kind;
+
+        union {
+                struct { KeysType K; Record *infoptr; } lf; //叶子结点
+                struct { TrieNode *ptr[27]; int num }   bh; //分支结点
+                // num为分支结点使用了多少个指针域
+        }
+}TrieNode, *TrieTree;
+
+Record *SearchTrie( TrieTree T, KeyType K ) {
+        
+        for ( p =T, i=0;
+                p && p->kind == BRANCH && i<K.num;
+                p = p->bh.ptr[ ord( K.ch[i]) ], ++i );
+
+        // 关键字不存在，前缀字符串，后缀字符串
+        if ( p&& p->kind == LEAF && p->lf.K == K ) return p-> lf.infoptr;
+        else return NULL;
+}
+
+
+
+
+后缀树：由字符串S（加上字符串结尾字符$）的所有后缀构造而成的Trie树。叶子结点包含后缀开始的位置信息S[i]。
+
+使用后缀树的例子：
+	在文本T中查找子串P; 
+	思路：（构造T+$的后缀树，并查找P）
+
+	字符串S在T中的重复次数；
+	思路：构造T+#的后缀树，在树中查找S结点下叶子结点的个数；
+
+	两个字符串S1，S2的最长公共部分；
+	思路：构造S1#S2$的后缀树，找到最深的非叶子结点并且该结点既无#也无$符号
+
+	在字符串S中查找最长回文；
+	思路：构造S+#及S'+$的(S'为S的反转字符串)广义后缀树，找到最低公共祖先LCA( S[i],S'[N-i-1] )以及 LCA( S[i+1],S'[N-i-1] )，其中0<=i<=N-1，N为字符串长度（不包括$），后者寻找偶回文，这样就可以获得回文的半径，得到最长回文。
+	S = GOOGLE,	S' = ELGOOG 
+
+
+CSDN: http://blog.csdn.net/TsengYuen/article/details/4815921
+
+
+

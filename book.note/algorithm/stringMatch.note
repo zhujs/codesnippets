@@ -1,0 +1,233 @@
+
+字符串匹配问题：在一段指定的文本T（长度为n）中，找出某指定模式P（长度为m）出现的所有有效位移s，使得T[s+1..s+m] = P[1..m]，其中0 <= s <= n-m。（注意字符索引是从1开始）
+
+
+算法			预处理时间		匹配时间（最坏情况）
+朴素算法		0			O( (n-m+1)m )
+Rabin-Karp		θ(m)			O( (n-m+1)m )	P=a^m, T=a^n
+有限自动机算法		O( m|字符表大小| )	θ(n)
+KMP算法			θ(m)			θ(n)
+
+
+若x = wy，w <<< x表示w为x前缀，若x = yw，w >>> x表示w为x的后缀；
+
+重叠后缀引理：若x>>>z, y>>>z，如果|x| <= |y|，则x >>> y，如果|x| >= |y|，则x <<< y，如果|x| = |y|，则x = y，
+
+
+朴素算法：
+NAIVE-STRING-MATCHER( T, P )
+{
+	n <- length[T]
+	m <- length[P]
+
+	// 从s为0到n-m查找模式P是否出现
+	for s <- 0 to n-m
+		do if P[1..m] = T[s+1..s+m]
+			then print"Patten occurs with shift"s
+	
+}
+
+若m=floor(n/2)，最坏情况下运行时间θ(n^2)
+
+如果改进朴素匹配算法？在朴素算法中，对于s的一个值，我们获得的关于文本的信息在考虑s的其他值时完全被忽略了，从这点出发可以改进得到KMP算法（是否有些字符已经匹配？）；
+
+
+Rabin-Karp算法：
+把每个字符看成是基数为d的表示法中的一个数字，进而比较“值”是否相同。
+
+模式字符串的“值”（想像52853表示为字符串，求其整数值，d=10），Hornor's rule：
+	p = P[m] + 10(P[m-1] + 10(P[m-2] + ... + 10(P[2] + 10P[1]) ...))
+
+文本T中长度等于P的字符串长度的“值”为t1,t2,t3,...,t(n-m)，可由下式递归计算：
+	t(s+1) = 10(ts - 10^(m-1) * T[s+1] ) + T[s+m+1]
+	例如：T = 35383535, t2 = 10* (35383 - 10000*3) + 5
+
+
+若P的长度太大，可用模运算改进效率：
+	t(s+1) = ( 10(ts - 10^(m-1) * T[s+1] ) + T[s+m+1] ) mod q
+	       = ( 10(ts - T[s+1]*h ) + T[s+m+1] ) mod q
+	       其中，h = 10^(m-1) mod q
+
+
+
+RABIN-KARP-MATCHER( T, P, d, p )
+{
+	n <- length[T]
+	m <- length[P]
+
+	// h 的意义见上式
+	h <- d^(m-1) mod q
+
+	p <- 0
+	t0 <- 0
+
+	for i <- 1 to m 	// Preprocessing
+		do p <- (d*p + P[i]) mod q  //这里模拟的是除法过程，p为余数
+		   t0 <- (d*t0 + T[i]) mod q
+
+
+	for s <- 0 to n-m 	// Matching
+		do if p = ts
+			// 可能不同值取模后会相同，因此需要进一步比较
+			then if P[1..m] = T[s+1..s+m]
+				then print"Patten occurs with shift"s
+		   if s < n-m
+			// 求下一个索引位置的“值”
+			then t(s+1) <-( d(ts - T[s+1]*h ) + T[s+m+1] ) mod q
+}
+
+
+有限自动机算法：
+FINITE-AUTOMATON-MATCHER(T, t, m) // t 为状态转移函数
+{
+	n <- length[T]
+	q <- 0
+
+	for i <- 1 to n
+		// 根据状态转移函数判断下一个状态
+		do q <- t(q, T[i] )
+			// 是否到达最终态（找到模式串）
+			if q = m
+				then print"Patten occurs with shift"i-m
+
+}
+
+
+有限自动机算法的关键是根据模式串建立状态转移函数：对任意状态q和字符a，转移函数t(q, a) = s( Pq + a )，其中s称为模式串P的后缀函数，s(x) = max{ k: Pk >>> x }（最长的已经确定匹配的字符串），Pq为自动机已经匹配的字符串（模式P的前q个字符）
+
+	P: ababaca
+	s( baaba ) = 3, P3 = aba是x的最长后缀，P4，P5都不匹配了
+
+终态函数f(wa) = t(f(w), a )，w为任一字符串，a为任意符
+
+字符匹配自动机的操作中保持该条件不变：f(Ti) = s( Ti )，Ti为自动机已读入的字符串，即自动机保持着已匹配的最长字符串，证明了这点，就可以知道该算法是正确的；
+
+
+后缀函数不等式：对任意字符串x和字符a，有s(xa) <= s(x) + 1；（由后缀函数的定义可证，r-1 <= s(x) ）
+后缀函数递归引理：对任意字符串x和字符a，有q=s(x)，则s(xa) = s(Pq + a )，可以画个图证明一下。。
+	r = s(xa), r<=q+1（后缀函数不等式）,r<=s(Pq + a)
+	s(Pq + a) <= s(xa)
+
+归纳证明：f(Ti) = s( Ti ), q = f(Ti), a=T[i+1]
+	f( Ti+1 ) = f(Ti + a)
+		= t( f(Ti), a )
+		= t( q, a )
+		= s( Pq + a)	（自动机转移函数的定义）
+		= s( Ti + a)	（由后缀函数递归引理和归纳所得：q = f(Ti) = s(Ti) ）
+		= s( Ti+1 )
+
+即自动机保持着已匹配的最长字符串；
+
+计算转移函数：
+
+COMPUTE-TRANSITION-FUNCTION( P, S ) // S为字符集
+{
+	m <- length[P]
+	for q <- 0 to m
+		do for each character a in S
+			// 查找最大的k，使得Pk >>> Pq + a （Pk 是Pq + a的最长后缀）
+			do k <- min( m+1, q+2 )  // 注意k可以为0
+				repeat k <- k+1
+				until Pk >>> Pq+a
+			t( q, a ) <- k
+}
+
+改进：
+COMPUTE-TRANSITION-FUNCTION( P, S ) // S为字符集
+{
+	m <- length[P]
+	for q <- 0 to m
+		do for each character a in S
+			t( q, a ) <- t( p[q], a ) //p的定义见下文，这个可以由前缀函数的定义证明，P573
+}
+
+
+
+
+KMP算法：
+对自动机算法的改进，利用前缀函数p，有效地计算转移函数t；
+
+前缀函数p：p[q] = max { k: k<q 且 Pk >>> Pq } 
+
+		i	1 2 3 4 5 6 7 8 9 10
+		P[i]	a b a b a b a b c a
+		p[i]	0 0 1 2 3 4 5 6 0 1
+
+		p[3] = 1 , 因为a >>> aba
+
+
+KMP匹配：
+
+T:	c b a b a b a a b c b 
+		      |
+P:	    a b a b a c a       // a与c不匹配，右移q - p[q] = 2，q为已匹配的字符数
+		      |
+		a b a b a c a
+
+KMP-MATCHER( T, P )
+{
+	n <- length[T]
+	m <- length[P]
+	p <- COMPUTE-PREFIX-FUNCTION(P)
+
+	q <- 0	// 已匹配的字符数目 
+	for i <- 1 to n
+		do while q > 0 and P[q+1] != T[i]
+			do q <- p[q] //右移，q为已匹配的字符数
+
+		if P[q+1] = T[i]
+			then q <- q+1
+
+		if q = m
+			then print"Patten occurs with shift" i-m
+			q <- p[q]
+}
+
+COMPUTE-PREFIX-FUNCTION(P)
+{
+	m <- length[P]
+	p[1] <- 0
+	k <- 0
+
+	for q <-1 to m
+		do wihle k>0 and P[k+1] != P[q]
+			do k <- p[k]
+
+		if P[k+1] = P[q]
+			then k <- k + 1
+
+		p[q] <- k
+
+	return p
+}
+
+如何证明上述函数可以正确求得前缀函数p？（算法导论中文版第二版 571页）
+
+前缀函数迭代引理：对q=1,2,...,m，前缀函数p*[q] = { k: k<q且Pk >>> Pq }
+
+证明以下递归式（上述函数就是使用了该递归式）：
+	
+	0			如果E(q-1)为空
+p[q] = 
+	1+max{k in E(q-1)}	如果E(q-1)不为空
+
+E(q-1) = { k in p*[q-1]: P[k+1] = P[q] } //对应以上程序计算p的过程
+       = { k: k < q-1 且 Pk >>> P(q-1) 且 P[k+1] = P[q] }
+       = { k: k < q-1 且 P(k+1) >>> Pq }
+
+
+改进前缀函数p为p'，其中p'定义为：
+	0		如果p[q] = 0
+
+p'[q] = p'[p[q]]	如果p[q]!= 0 且 P[p[q] + 1] = P[q+1]
+
+	p[q]		如果p[q]!= 0 且 P[p[q] + 1]!= P[q+1]
+
+如果p[q] != 0且P[p[q] + 1] = P[q+1]，则当T[i]!=P[q+1]时，T[i]一定不等于P[p[q] + 1 ]，所以下一次比较的字符是P[ p'[p[q]] + 1]，（这里是p'，递归过程，若P=aaaab，T=aaabaac，T[4] = b != P[4] = P[3+1], q=3）
+
+
+如何证明KMP的正确性：t(q, T[i]) = 0，或者t(q, T[i]) - 1 in p*[q]
+KMP算法可以在p*[q]中找到t(q, T[i])!!
+
+
+
