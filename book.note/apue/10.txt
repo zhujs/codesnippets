@@ -1,0 +1,411 @@
+
+总结一下POSIX中的信号机制及其相关的程序接口（POSIX标准化了信号机制，历史上
+Version 7提供了不可靠的信号机制（信号可能丢失及不可以屏蔽信号），BSD4.3与
+SVR3虽然提供了可靠的信号机制，但彼此不兼容）；
+
+10.2 
+信号名定义在<signal.h>中，但各版本实现把各信号名定义在别的头文件中，
+(Linux:<bits/signum.h>)，这些头文件被<signal.h>所包含。(It is considered bad
+form for the kernel to include header files meant for user-level 
+applications, so if the applications and the kernel both need the same 
+definitions, the information is placed in a kernel header file that is then
+included by the user-level header file :)；
+
+产生信号的几个情况：
+终端产生（例如 Control-C ）
+硬件错误（除0，内存引用错误，信号传递给相应的。。线程）
+Kill函数，kill命令（root或者进程的拥有者）
+软件条件（SIGURG:out-of-band data，SIGALRM，SIGPIPE）
+
+Core files (a memory image of the process) is an implementation feature of most system version. (Linux: (ulimit -c N) to eable the core files dump, (cat /proc/sys/kernel/core_pattern) to modify the core files name pattern.) 
+
+对信号的处理（disposition,action）：SIG_IGN( SIGKILL and SIGSTOP不能被忽略。), SIG_DFL, catch the signal：
+各种信号的意义请参阅man page (command: kill -l)
+
+
+
+10.3 signal函数：
+signal函数的语义在不同平台并不一样，System V中该函数提供的是不可靠的信号机制，BSD中为可靠的信号机制，Linux则依赖于C库版本及编译选项，因此推荐使用sigaction函数；
+
+process start-up:
+如果一个进程捕获了信号，在调用exec函数创建新进程后会exec将其设置为default action，如果设置为SIG_IGN则不变(the address of the signal- catching function in the caller probably has no meaning in the new program file that is executed)
+
+With a shell that doesn't support job control, run the command in the bg 
+(cc main.c &), the shell automatically sets the disposition of the interrupt
+and quit signals in the background process to be ignored. If not, these 
+signals kill both fg and bg processes.
+
+process creation:
+fork函数后将保留信号捕获函数；
+
+
+
+10.4 
+不可靠的信号表现为：
+（Version 7）信号可能丢失，进程并不知道；不能阻塞信号(sometimes we just want
+to remember if it occurs)；
+
+1，信号出现后，其action会被重置为默认的handler（重新注册信号处理函数时会出
+现时间窗口，使信号丢失）
+	sig_int() /* signal handler */
+	{
+		/* signals occurring in  here terminate the process */
+		signal( SIGINT, sig_int );
+	}
+
+2，信号无法被阻塞，当检测信号是否出现时产生时间窗口
+	wile( 0 == flag ) /* set a flag in the signal handler */
+	{
+		/* signals occurring in here are lost */
+		pause();
+	}
+
+POSIX提供的可靠信号机制解决了这两个问题（标准化了BSD的接口）；
+
+
+
+10.5
+慢中断系统调用(there is a good chance that something has happened that should wake up the blocked system call)：
+	read or write functions that can block the caller;
+	Open a remote terminal (a terminal device that waits until an attached modem answers the phone);
+	pause function;
+	Certain ioctl operations and some of the interprocess communication functions;
+
+系统调用被中断时设置errno 为EINTR (we have to handle the error return explicitly)
+是否重启慢中断系统调用依赖于系统（man signal）；sigaction函数可以指定SA_RESTART flag( XSI )，允许重启系统调用；
+
+
+10.6
+不可重入函数主要有（不可以在执行到一半时再次执行函数）：
+使用static buffer的函数；
+调用malloc或free的函数(malloc usually maintains a linked list of all its allocated areas)；
+标准I/O函数（因为可能会用到很多全局变量）；
+
+在signal handler中要注意：
+在信号处理函数中要保存并恢复errno变量的值（only one errno variable per thread)；
+不能调用跳转函数longjmp 或siglongjmp等函数（the main routine was updating a data structure, we need to block the signal which calls longjmp or siglongjmp in the handler）；
+
+
+
+10.7
+System V中的“异类”信号SIGCLD (SIGCHLD)：
+	sig_cld(int signo)
+	{
+		signal( SIGCLD, sig_cld); /* a indefinite loop */
+		wait();
+	}
+	/* we need to reestablish the handler after the wait , */
+	/* but if we use POSIX.1 signal, no need to reestablish the handler*/
+
+
+SIGCHLD信号是否表现出以上两种特征依赖于平台（POSIX也没有定义），sigaction
+函数使用SA_NOCLDWAIT flag避免产生zombies；
+
+
+
+10.8
+signal is generated, signal is delivered, signal is blocked, signal is pending, signal is queued
+
+
+
+
+10.9
+kill and raise function:
+raise function is equivalent to kill( getpid(), signo ); check manual page for the permission needed to send a signal.
+
+Sending a signal 0 is used to determine if a specific process still exists. (however, because the system recycle process IDs, so the existence of a process with a given process ID does not mean that it's the process that you think it, and also the test for existence is not atomic)
+
+Before kill returns, at least an unblocked signal is delivered to the process (so as sigsuspend function)
+
+
+
+
+10.10
+alarm and pause function: (check man page)
+	flowed sleep function:
+	sleep1(unsigned int nsecs)
+	{
+		signal(SIGALRM, sig_alrm); /* we need to save the disposition and restore it when we're done */
+		
+		alarm(nsecs); /* how to handle the interaction with previous alarm function */
+
+		/* the signal may be lost in a busy system */
+		pause();
+		return(alrm(0) );
+	}
+
+
+	sleep2( unsigned int signo)
+	{
+		signal() /* also need to save and restore the disposition*/
+		if( setjmp(env_alrm) == 0 )
+		{
+			alarm(nses); /* handle the interaction */
+			pause();
+		}
+		/* signal won't get lost, but the longjmp function in the signal handler may interrupt some other signal handler */
+		return (alarm(0));
+	}
+
+	/* set a timeout for read function */
+	alarm( 10 );
+	/* a race condition */
+	read(); /* the SIGALRM is useless if blocked system call restarts */
+
+	/* we can use longjmp function to avoid the race condition, but it still may interrupt some other signal handler */
+
+
+
+
+10.11
+signal set: sigset_t, sigemptyset, sigfillset, 
+	sigaddset, sigdelset, sigismember.
+
+	sigdelset(sigset_t *set, int signo)
+	{
+		...
+		*set &= ~(1 << (signo -1 ));	/* turn bit off */
+		...
+	}
+
+
+
+
+10.12, 10.13
+sigprocmask, sigpending function:
+	use SIG_SETMASK to restore the signal mask, don't just using SIG_UNBLOCK
+
+
+
+
+
+10.14
+sigaction: examine or modify (or both) the action associated with a particular signal.
+	struct sigaction {
+		void (*sa_handler) (int);
+
+		sigset_t sa_mask; /* additional signals to block in handler, the signal being delivered is automatically included in this mask, if signal-catching function returns, the signal mask is reset */
+
+		int sa_flags;
+		/* SA_INTERRUPT, SA_NOCLDSTOP, SARESETHAND, ... */
+
+		void (* sa_sigaction) (int, siginfo_t *, void *)
+		/* alternate handler (SA_SIGINFO), usually a union with sa_handler, only one of them will be used */
+		/* siginfo_t contains information about why the signal was generated */
+	}
+
+Many platforms implement the signal function using sigaction, but other provid a signal function that supports the older, unreadable-signal semantics for compatibility.
+	signal( int signo, Sigfunc *func )
+	{
+		sturct sigaction act, oact;
+		...
+		if( SIGALRM == signo )
+		{
+#ifdef SA_INTERRUPT
+			/* allow us to set a timeout for I/O operation.
+			act.sa_flags |= SA_INTERRUPT;
+#endif
+		}else {
+#ifdef SA_RESTART
+			act.sa_flags |= SA_RESTART;
+#endif
+		}
+check manual page for more detail.
+
+
+
+10.15
+sigsetjmp and siglongjmp:
+	nonlocal branching with signal mask restoration option. POSIX.1 does not specify the effect of setjmp and longjmp (Linux do not restore) on signal masks but define sigsetjmp and siglongjmp.
+
+sig_atomic_t: the type of variable that cat be written
+volatile: every access of the volatile variables must 
+
+main routine:
+	if (sigsetjmp( jmpbuf, 1) )
+	{
+	}
+	canjump = 1;  /* now the jmpbuf is initialed, sigsetjmp is OK */
+
+signal handler:
+	if (0 == canjump )
+		return; /* ignore unexpected signal because signal can occur at any time */
+
+
+
+10.16
+sigsuspend function:
+	considers the code snippet:
+
+	/* block SIGINT and save current signal mask */
+	sigprocmask(SIG_BLOCK, &newmask, &oldmask);
+
+	...
+
+	sigprocmask( SIG_UNBLOCK, &oldmask, NULL );  <-+
+                                                       |
+	/* window is open, signals are lost */         | --> sigsuspend
+	pause()                                      <-+
+
+sigsuspend( const sigset_t *sigmask ), set signal mask to sigmask and pause,
+if returns, the mask is reset.
+	Protect a critical region of code from a specific signal.
+		as above code shown. 
+		Before the call to sigsuspend, we need to block the signal first.
+
+	Wait for a SIGQUIT signal handler to set a global variable.
+		while( 0 == quitflag )
+			/* other signals may wake up the process, so we need the while loop */
+			sigsuspend( &zeromask ); 
+
+	Use SIGUSR1, SIGUSR2 to synchronize a parent and child.
+		while( 0 == flag )
+			sigsuspend( &zeromask ); /* wait for parent */
+
+
+sigsuspend can help us if:
+	if (intr_flag) 		/* flag set by our SIGINT handler */
+		handle_intr();
+
+	/* signals occurring in here are lost */
+
+	while ( select(..) < 0) /* assuming system call will be interrupted */
+	{
+		if( errno == EINTR)
+			handle_intr();
+	}
+
+	but we can use pselect:
+	pselect is equivalent to atomically executing the following calls:
+		sigset_t origmask;
+		pthread_sigmask(SIG_SETMASK, &sigmask, &origmask);
+		ready = select(nfds, &readfds, &writefds, &exceptfds, timeout);
+		pthread_sigmask(SIG_SETMASK, &origmask, NULL);
+
+
+
+
+10.17
+abort function (calls raise(SIGABRT) in abort, ISO C):
+	/* POSIX-style abort() function */
+	{
+		if( action.sa_handler == SIG_IGN)
+		{
+			/* caller can't ignore SIGABRT, if so reset to default */		
+		}
+
+		if( action.sa_handler == SIG_DFL )
+			fflush( NULL );
+
+		/*caller can't block SIGABRT */
+		/* block all signals but SIGABRT, then signal is delivered to process before kill returns */
+		sigfillset(&mask );
+		sigdelset( &mask, SIGABRT );
+		kill( getpid(), SIGABRT); /* caller determines whether flush the I/O or not, kill won't return if handler calls exit() */
+
+		/* if get here, process caught SIGABRT and returned */
+		fflush( NULL ); /* may has generated output in handler */
+		/* reset to default handler and send the signal again */
+		/* does not bother to delete temporary file (tmpfile,unlink)and close of standard I/O stream (kernal do this for us)*/
+	}
+
+
+
+
+10.18
+why system function need to worry about signal handling?
+block SIGCHLD signal:
+因为system的调用者不应该捕获由system中子进程产生的SIGCHLD信号（这样的话system无法返回子进程状态值），POSIX.1 说明除非调用者还有子进程已结束，否则不发送SIGCHLD信号，但很多系统都发送该信号(pending)
+
+SIGINT, SIGQUIT:
+system的调用者（调用者是等待system返回的）应该忽略这两个信号，否则调用者会
+因收到信号而终止；如果system调用的命令为交互命令（如vim），则由终端产生的两
+个信号会发送给前台进程组；
+	      +----------+        +-----------+       +-----------+
+              | a.out    |        | /bin/sh   |       |/bin/vim   |
+              +----------+        +-----------+       +-----------+
+                  |                      |                  |
+                  +----------------------+------------------+
+                                         v
+                       SIGINT, SIGQUIT sent to fg process group 
+
+
+system的返回值是shell的返回值。并不是所需要执行命令的返回值，
+	execl("/bin/sh",......)
+
+	tsy "sleep 30" #print the exit status of system("sleep 30")
+	# if type the interrupt key: normal termination, exit status = 130
+
+	tys "sleep 30" &
+	kill -KILL XXX # XXX is the PID of the shell that system invokes
+	# if type the interrupt key: abnormal termination, signal number = 130
+
+
+
+
+10.19
+sleep function (waits for specific amount of time or returns if a signal is caught):
+	sleep(...)
+	{
+		/* set our handler, save previous information */
+		sigaction(SIGALRM, &newact, &oldact);
+		...
+
+		/* block SIGALRM and save current signal mask */
+		sigaddset(&newmask, SIGALRM);
+		...
+
+		alarm(nsecs);
+
+		suspmask = oldmask;
+		sigdelset(&suspmask, SIGALRM);
+		sigsuspend(&suspmask); /* make sure SIGALRM isn't blocked */
+
+		/* wait for any signal to be caught */
+		/* some signal has been caught, SIGALRM is now blocked */
+		unslept = alarm(0);
+
+		...
+		/* reset previous action */
+		/* reset signal mask, which unblocks SIGALRM */
+		return(unslept);
+	}
+
+
+
+
+10.20
+job-control signals:
+	SIGCHLD, SIGCONT, SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU
+	(SIGSTOP can't be caught or ignored)
+
+	usually we only deal with SIGTSTP and SIGCONT in interactive programs like editor (save and restore the terminal state)
+
+	If stop signal is generated, any pending SIGCONT signal is discarded, and vise versa.
+
+
+The normal sequence of code used when a program handles job control:
+	/*
+	* Only catch SIGTSTP if we're running with a job-control shell (the shell set its disposition
+	* to SIG_DFL).
+	* A shell without job-control does not care about these signal, so they set their disposition
+	* to SIG_IGN (or may be inherited from init, not explicitly set)
+	*/
+	if (signal(SIGTSTP, SIG_IGN) == SIG_DFL)
+		signal(SIGTSTP, sig_tstp);
+
+
+	sig_tstp( int signo )
+	{
+		/* save terminal state */
+		/* unblock SIGTSTP, reset the disposition and send the signal to ourself */
+		/* restore the terminal state and set disposition to sig_tstp */
+	}
+
+
+
+10.21
+extern char *sys_siglist[];	
+psignal()	<---> 	perror()
+strsignal()	<--->	strerror()
+sig2str()	str2sig()

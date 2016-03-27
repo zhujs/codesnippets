@@ -1,0 +1,312 @@
+4.2
+stat, fstat, lstat: returns a structure of information about the named file.
+
+the stat structure could look like:
+	struct stat {
+		mode_t	st_mode;/* file type & mode (file permissions) */
+		ino_t	st_ino;	/* i-node number (index ) */
+		dev_t	st_dev;	/* device number (file system that contains the file) */
+		dev_t	st_rdev;/* device number for special files */
+		nlink_t	st_nlink;/* number of links */
+		uid_t	st_uid;	/* user ID of the file */
+		gid_t	st_gid; /* group ID of the owner */
+		off_t	st_size;/* size in bytes, for regular files */
+		time_t	st_atime;/* time of last access */
+		time_t	st_mtime;/* time of last modification */
+		time_t	st_ctime;/* time of last file status change (i-node information ) */
+		blksize_t	st_blksize; /* best I/O block size */
+		blkcnt_t	st_blocks; /* total number of disk blocks allocated */
+};
+
+
+
+4.3
+File types in UNIX system:
+	1. regular file: text file or binary file	
+	2. directory file: a file that contains the names of other files and pointers to information on these files (i-node). Only the kernel can write directly to a directory file.
+	3. Blcok special file: a file providing buffered I/O access to device (disk drives)
+	4. Character special file: a file providing unbuffered I/O access to device
+	5. FIFO: for IPC
+	6. Socket: network communication
+	7. symbolic link: a file that points to another file
+
+
+The type of a file is encoded in st_mode member of struct stat. There several macros to test the type of a file:
+	S_ISREG()
+	S_ISDIR()
+	S_ISCHR()
+	S_ISBLK()
+	S_ISFIFO()
+	S_ISLNK()
+	S_ISSOCK()
+
+If the XSI IPC objects ( message queue, semaphore, shared memory object) are implemented with files, use the following macros to test it (not in Linux):
+	S_TYPEISMQ()	S_TYPEISSEM()	S_TYPEISSHM()
+
+S_ISDIR() is equivalent to (<sys/stat.h>):
+	#define S_ISDIR( mode )	((( mode) & S_IFMT) == S_IFDIR )
+
+
+4.4
+Every process has six or more IDs associated with is: 
+	rID, rGID; 
+	eID, eGID, sGID; 
+	saved set-user-ID, saved set-group-ID; (copy of eID and eGID)
+
+
+set-user-ID and set-group-ID information of file is also encoded in st_mode member of stat.
+
+
+4.5
+The permissions of the file:
+
+	S_ISUID()	S_ISGID()
+
+user:	S_IRUSR()	S_IWUSR()	S_IXUSR()
+group:	S_IRGRP()	S_IWGRP()	S_IXGRP()
+other:	S_IROTH()	S_IWOTH()	S_IXOTH()
+
+The execute permission for directory allows we search files in the directory (/usr/include/stdio.h, the PATH environment variable)
+
+O_TRUNC flag in open : write permission
+create a new file in a directory :write permission and execute permission in the directory
+delete an existing file : write permission and execute permission in the directory containing the file
+execute the file : a regular file and execute permission is on
+
+
+File access test for a process:
+	1. superuser, eID = 0
+	2. eID = owner ID of the file ->  user permission.
+	3. eGID or sGID = owner group ID of the file -> group permission.
+	4. other access permissions bits.
+
+4.6
+ownership of new Files and Directories:
+	owner ID = eID of process
+	group ID = eGID of process 
+			or 
+		the group ID of the parent directory (FreeBSD 5.2.1, Mac OS X 10.3) and may depend on the set-group-ID of the parent directory in Linux and Solaris (then mkdir function has to propagate a directory's set-group-ID bit automatically).
+		
+4.7
+access function: access tests based on the real user and group ID (rID and rGID)
+	access( filename, R_OK or W_OK or X_OK or F_OK)
+
+4.8
+umask: file mode creation mask that is associated with every process.
+	mode_t umask( mode_t cmask )
+Any bits that are on in the file mode creation mask are turned off in the file's mode
+		
+umask function doesn't affect the mask of its parent (so we need the built-in umask command)
+
+umask -S	-> 	print the symbolic form 
+
+
+
+4.9
+chmod, fchmod: change the file access permissions for an existing file	
+	S_ISUID, S_ISGID, S_ISVTX (save-text)
+
+the chmod functions automatically clear two of the permission bits under the following conditions:
+	1. some system only allows the superuser to set the sticky bit of a regular file, otherwise, the bit is cleared (Solaris may cache the regular file, then setting this bit may affect the system performance)
+	2. set-group-ID is turned off if eGID != new file's group ID or eSID != new file's group ID (if the new file's group ID is inherited frome the parent directory ). This prevents from creating a set-group-ID file owned by a group that the user doesn't belong to
+	3. if a process does not have superuser privileges writes to a file, the set-user-ID and set-group-ID bits are automatically turned off.
+
+
+4.10
+sticky bit: save-text bit (the text portion of a executable file stuck around in the swap area until the system was rebooted)
+
+sticky bit is set for a directory, a file in the directory can be removed or renamed only if the user has write permission for the directory and one of the following (the /tmp directory):
+	own the file
+	own the directory
+	is the superuser
+
+
+4.11
+chmod, fchown, lchown:
+	If _POSIX_CHOWN_RESTRICTED is in effect for the specified file:
+	1. superuser process can change the user ID of the file
+	2. non-privileged user (eID = owner ID of file) can change the group ID of the file to eGID or sGID.
+
+If these functions are called by a process other than a superuser process, on successful return, both the set-user-ID and the set-group-ID bits are cleared.
+
+
+4.12
+st_size: the size of file in bytes, meaningful only for regular files, directories, and symbolic links.
+st_blksize: preferred block size for I/O for the file
+st_blocks: number of blocks
+
+
+Holes are created by seeking past the current end of file and writing some data (the data in the holes are 0).
+
+
+
+4.13
+ftruncate: chop off data at the end of the file, it is not guaranteed to increase the size of the file!!!! BSD releases prior to 4.4BSD could only make a file smaller with truncate.
+
+truncate function: XSI
+
+
+
+
+4.14
+the st_nlink member of the structure stat: (LINK_MAX) 
+
+    +--------------+-------------------------------------------+
+    |i-node array  |     data blocks                           |
+    +--------------+-------------------------------------------+
+                    \    ^
+    |                \  /
+    |                 \/ points to the data blocks
+    |                 /\
+    +------+---+------+----+
+    |i-node|...|i-node|    |
+    +------+---+------+----+
+                  ^
+                   \ link to this file (a directory entry)
+                    \    +---------------------+
+                     \   |                     |
+                      \  +-----------+---------+
+                       \ |i-node num |filename |
+                         +-----------+---------+
+
+unlink a file!!!
+
+we cannot have a directory entry point to an i-node in a different file system.
+
+When renaming a file without changing the file systems, the actual contents of the file need not be move, all that needs to be done is to add a new directory entry that points to the existing i-node, and then unlink the old directory entry.
+
+For the link of a directory, please minds the '.' and '..' directories.
+
+
+
+
+4.15
+link: create a hard link to an existing file (for a directory, it may cause loops in the file system)
+
+unlink: remove an existing directory entry. Only when the link count reaches 0 can the contents of the file be deleted (tmpfile and then unlink). The superuser can call unlink with a directory name.
+
+remove: is equivalent to unlink or rmdir (ISO C, because most non-UNIX systems didn't support the concept of links to a file at that time)
+
+rename: a file or directory is renamed with this function.
+
+
+
+4.16
+The benefit of the symbolic link:
+	1. create a symbolic link that points to a file reside in another file system
+	2. everyone can create a hard link to a directory
+
+The functions that does not follow symbolic link: lchown, lstat, readlink, remove, rename, unlink. The chown function depends on the implantation.
+
+Exception: if the open function is called with both O_CREAT and O_EXCL set, the open will fail if the pathname refers to a symbolic link (the malicious user can create a symbolic file to point to other file, so the privileged processes may be fooled into writing to the wrong files)
+
+                              *******  
+                           *** foo   ***    <--------+
+                              *******                | symbolic link to parent directory
+                            /           \            |
+                           /             \           |
+                      +-----+              *****     |
+                      | file|           *** dir ***
+                      +-----+              *****   
+
+			Symbolic link dir that creates a loop
+
+
+This loop causes problem when we use the ftw function to descend through a file hierarchy if the ftw is implemented with the stat function.
+
+This loop can be remove with the unlink function (doesn't follow the symbolic link). We cannot remove the hard link using unlink or rmdir function (dead loop).
+
+The symbolic link can point to a file doesn't exist.
+ls -F:
+
+
+
+
+4.17
+symlink: create a symbolic link (The symbolic link can point to a file doesn't exist).
+readlink: read the name in the symbolic link
+
+
+4.18
+	 +---------+----------------------------------------+-------------------+
+	 | Field   |   Description                          | Example |ls option|
+	 +---------+----------------------------------------+---------+---------+
+	 |st_atime | last-access time of file data          | read    |   -u    |
+	 |st_mtime | last-modification time of file data    | write   | default | -t
+	 |st_ctime | last-change time of i-node status      | chmod   |   -c    |
+	 +--------------------------------------------------+---------+---------+
+
+when create a new file, the last-acces time is changed.
+
+
+
+
+4.19
+int utime( const char *pathname, const struct utimbuf *times );
+	1. times == NULL: set to current time if eID == owner ID of file or write permissions for the file
+	2. times != NULL: eID == owner ID of the file or superuser
+
+struct utimbuf {
+	// calendar times
+	time_t actime; // access time
+	time_t access; // modification time
+}
+The st_ctime field is automatically updated when the utime function is called.
+
+
+
+4.20
+Directories are created with the mkdir function and deleted with the rmdir function.
+On some systems, mkdir propagates the set-group-ID of the directory.
+
+rmdir: remvoe an empty directory. If one or more processes have the directory open when the link count reaches 0, the last link is removed and the dot and dot-dot entries are removed before this function returns and no new files can be created in the directory.
+
+
+
+4.21
+Reading Directories:
+	DIR * opendir(...)
+	struct dirent *readdir( DIR )
+
+	void rewinddri( DIR )
+	int telldir( DIR ); void seekdir(DIR *dp, long loc); (XSI)
+
+	
+	while( (dirp = readdir(dp) ) != NULL  )
+	{
+		if ( strcmp (dirp -> d_name, "." ) == 0  || (strcmp (dirp -> d_name, ".." ) == 0 ) )
+			// skip '.' and '..'
+			...
+	}
+
+
+4.22
+chdir, fchdir: change the current working directory of processes
+
+The kernel only keeps information about the current working directory, such as a pointer to the directory's v-node. We need a function that starts at the current working directory and move up with the dot-dot to find the pathname, and this is what getcwd does.
+
+
+getcwd has no idea when it hits the symbolic link directory when it works its way up the directory hierarchy.
+
+return to our starting location: fd = open( getcwd(...) ) ->  fchdir(fd)
+
+
+4.23
+Consider these two numbers as POINTERS to the devices driver in kernel!!
+
+The file system major number (device driver) and minor number (subdevice) are encoded in st_dev member.
+We can usually access the major and minor device numbers through two macros: major and minor (depends on the implementation how to store these two number in st_dev). 
+
+st_rdev: only character special files and block special files have an st_rdev value. This value contains the device number for the actual device (device driver and subdevice).
+
+
+/:		dev = 3/3
+/home/z:	dev = 4/4
+/dev/tty0:	dev = 0/7	(character) rdev = 4/0
+/dev/tty1:	dev = 0/7	(character) rdev = 4/1
+/dev/sda3:	dev = 0/7	(character) rdev = 3/3
+
+
+/ and /home/z are on different file system.
+/dev/tty[01] are on device 0/7, the devfs pseudo file system, which implements the /dev
+the actual device numbers for device special file

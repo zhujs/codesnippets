@@ -1,0 +1,185 @@
+现在总结一下POSIX.1-2001线程模型中的线程的产生及其线程同步的接口，下一次再回顾下线程的控制。
+
+POSIX提供了pthread线程库（_POSIX_THREADS）。线程说是比进程更小的运行单位，所
+有线程都可以访问到进程的地址空间（可以访问全局变量，文件描述符等）。在线程中
+运行的函数（the newly created thread starts running at the address of the 
+function）使用使用的栈与进程栈有所不同（感觉线程栈是所使用的线程库在堆上或者以其它方式实现）。
+
+
+11.2
+The benefits of threads (A process can be thought of a single thread of 
+control):
+	Turn asynchronous model into a synchronous model.
+	Have access to the same resource of process.
+	Improve the overall program throughout by interleaved thread (interactive programs).
+
+A program can be simplified using threads regardless of the number of 
+processors and as long as your program has to block when serializing task, 
+can still see improvements in responds time and throughout when running on 
+a uniprocessor.
+
+Thread context:
+	thread ID, a set of register values, a stack, 
+	a scheduling priority, a signal mask, an errno variable,
+	thread-specific data
+
+
+
+11.3
+	pthread_t: implementation are allowed to use different data type to
+represent it (int or data structure), there is no portable way to print it. 
+	pthread_t pthread_self(void)，返回线程的线程ID。
+
+	int pthread_equal(...)， 判断pthread_t（不一定为整型）类型的thread ID是否相等。(when a thread needs to identify data structure that are tagged with its thread ID)
+
+
+11.4
+使用线程的基本接口，所有函数如果出错则返回错误类型，不设置errno (the per 
+thread copy of errno is provided only for compatibility with existing 
+functions)
+
+	pthread_create()，注意要确定传递给线程的函数参数是否已有效（因为不能预知线程的运行顺序）！！！！（传递地址）。The pending signals for the thread is cleared and the newly created thread can be run before it returns.
+
+		/* the memory area arg points to can not be destroyed */
+		pthread_create( &ntid, NULL, thr_fn, arg );
+
+	In Linux, clone (create a light-weight process) is used to implement the pthread_create function, so different threads has different thread IDs.
+
+
+
+
+
+
+11.5
+	退出线程的三种方式：
+		call pthread_exit;
+		return from the start routine; 
+		canceled by another thread in the same process;
+
+		/* the foo variable can not be destroyed */
+		pthread_exit( &foo );
+
+	pthread_join(); block until the specified thread exits and get the exit status, 
+			automatically place a thread in the detached state (the thread's underlying
+			storage can be reclaimed immediately on termination), If the thread was 
+			canceled, the memory location specified by rval_ptr is set to 
+			PTHREAD_CANCELED)
+
+		thr_fn1( void *arg )
+		{
+			...
+			return ((void *) 1 );
+		}
+
+		void *tret;
+		err = pthread_create(&tid1, NULL, thr_fn1, NULL);
+		...
+		err = pthread_join(tid1, &tret); // tret will be set to 1
+
+
+
+	pthread_cancel(); 
+		request that another thread be canceled 
+		(only a request, doesn't wait for the thread to terminate, a thread can elect
+		to ignore or control how it is canceled)
+
+	pthread_cleanup_push(), pthread_cleanup_pop(); 
+		arrange for functions to be called when the thread exits, similar to the atexit 
+		function. 
+		线程执行这三个动作（pthread_exit, responds to cancellation request, call 
+		pthread_cleanup_pop with a nonzero argument）时，cleanup函数将会执行（从线程运行
+		函数返回(return)时不执行）。
+
+		A restriction with these functions is that, because they can be implemented as macros
+		, they must be used in matched pairs within the same scope in a thread ('{', '}')
+
+	pthread_detach(); 
+		detach a thread so that the underlying storage can be reclaimed immediately on termination.
+
+
+比较进程函数与线程函数的不同：
+	fork		pthread_create		create a new flow of control
+	exit		pthread_exit		exit from an existing flow of control
+	waitpid		pthread_join		get exit status from flow of control
+	atexit		pthread_cleanup_push	register function to be called at exit	
+	getpid		pthread_self		get ID for flow of control
+	abort		pthread_cancel		request abnormal termination of flow of control
+
+
+
+11.6
+接下来说一下线程的同步。设计并行程序时要设计的是程序的并行结构，即使程序运行在单CPU的机器上也可以利用线程提高吞吐量。当线程涉及到要共享数据时，容易发生race condition（这个名词我是理解为程序的结果要看哪个线程跑得快），因此线程的同步就显得尤为重要。容易出现程序结果不一致的情况有：
+	the combination of the increment step (the modification takes more than one memory cycle);
+	the decision-making step aren't atomic (check a value and make a decision), so this opens a window where inconsistencies can arise.
+
+If our data always appears to be sequentially consistent, then we need no additional synchronization. Our operations are sequentially consistent when multiple threads can't observe inconsistencies in our data. In modern computer systems, memory accesses take multiple bus cycles, and multiprocessors generally interleave bus cycles among multiple processors, so we aren't guaranteed that our data is sequentially consistent.
+
+
+为解决以上问题，提出了锁与信号量（condition，指某一种情况的发生)的概念，用来保证操作的原子性。These mechanism works only if we design our threads to follow the same data-access rules（也就是说所有线程都得使用lock来访问数据，如果其中一个线程捣乱也会出错）.
+
+	Mutex, protect our data and ensure access by only one thread at a time (lock, unlock).
+	Read-Write lock, similar to mutexes, except that they achieve for higher degrees of parallelism (read-lock, write-lock, unlock).
+	Condition, provide a place for threads to rendezvous( wait for arbitrary conditions to occur, the condition variable itself must be protected by a mutex).
+
+
+互斥锁的函数接口（pthread_mutex_t 对象）：
+
+	pthread_mutex_init(), pthread_destroy(); 初始化及销毁mutex对象（*mutex = PTHREAD_MUTEX_INITIALIZER编译不成功，只对静态分配的对象调用成功）。在Ubuntu 12.04上做过一个测试，没有调用pthread_destroy也不会造成内存泄漏(valgrind)。
+
+	pthread_mutex_lock(), pthrad_mutex_trylock(), pthread_mutex_unlock(); 
+		只想说一下trylock不会阻塞，可以在防止死锁问题时使用。
+	
+
+避免死锁：Deadlocks can be avoided by carefully controlling the order in which mutexes are locked (all threads request all the locks in the same order). If it is difficult to apply a lock ordering, try to use the pthread_mutex_trylock to avoid deadlocking in this case, if you cannot acquire the lock, release the locks you already hold, clean up, and try again later.
+
+
+锁的粗细：If your locking granularity is too coarse, you end up with too many threads blocking behind the same locks, with little improvement possible from concurrency. If your locking granularity is too fine, then you suffer bad performance from excess locking overhead, and you end up with complex code. As a programmer, you need to find the correct balance between code complexity and performance, and still satisfy your locking requirements.
+
+
+读写锁的函数接口（pthread_rwlock_t，可以多个线程拥有读锁，只能一个线程拥有写锁）：
+	Reader-writer locks (shared-exclusive locks) are well suited for situations in which data structures are read more often than they are modified. Implementations might place a limit on the number of times a reader-writer lock can be locked in shared mode (prevents a constant stream of readers from starving waiting writers), so we need to check the return value of pthread_rwlock_rdlock.
+
+	pthread_rwlock_init(), pthread_rwlock_destroy(); 每个rwlock（shared-exclusive locks）都必须先初始化，后调用destroy函数销毁（initialize的时候可能分配内存）
+	pthread_rwlock_rdlock, pthread_rwlock_wrlock, pthread_rwlock_unlock，也有trylock的函数。
+
+信号量（pthread_cond_t，需要与mutex配合使用）可以解决前边所说decision-making step中的竞争问题，等待某一情况的发生：
+
+	pthread_cond_init, pthread_cond_destroy, PTHREAD_COND_INITIALIZER; 与Mutex类似的初始化及销毁。
+	pthread_cond_wait(), pthread_cond_timedwait(struct timespec)；This closes the window between the time that the condition is checked and the time that the thread goes to sleep waiting for the condition to change, so that the thread doesn't miss a change in the condition. The caller passes the mutex locked to the functions, when these functions return, the mutex is again locked and a thread needs to reevaluate the condition, since another thread might have run and already changed the condition.
+
+	pthread_cond_signal(), pthread_cond_broadcast(); signaling the thread or condition.
+		the pthread_cond_signal function will wake up one thread waiting on a condition, whereas the pthread_cond_broadcast function will wake up all threads waiting on a condition.
+
+
+插入一段信号量示例代码：
+	process_msg(void)
+	{
+		for (;;) {
+			pthread_mutex_lock(&qlock);
+
+			/* reevaluate the condition, another thread might have run and already changed the condition, qlock is used to protect workq and qready*/
+			while (workq == NULL) 
+				pthread_cond_wait( &qready, &qlock );
+
+			/* remove the message */
+			pthread_mutex_unlock(&qlock);
+		}
+	}
+
+	enqueue_msg( struct msg *mp)
+	{
+		pthread_mutex_lock( &qlock );
+		...
+
+		pthread_mutex_unlock(&qlock);
+		pthread_cond_signal(&qlock);
+
+	}
+
+
+
+Note: semaphore in Linux
+
+sem_init()  initializes the unnamed semaphore at the address pointed to by sem.  The value argument specifies the initial value for  the  semaphore.
+
+The pshared argument indicates whether this semaphore is to be shared between the threads of a process, or between processes.

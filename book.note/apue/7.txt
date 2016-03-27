@@ -1,0 +1,156 @@
+
+This is about the environment of a single process. We'll see how the main 
+function is called when the program is executed, how command-line arguments 
+are passed to the new program, what the typical memory layout looks like, how to
+allocate additional memory, how the process can use environment variables, and
+various ways for the process to terminate. Additionally, we'll look at the 
+longjmp and setjmp functions and their interaction with the stack. We finish the
+chapter by examining the resource limits of a process.
+
+
+main函数是如何被调用的？
+所有C程序都必须有一个main函数，在编译链接后，产生的ELF文件在执行时会先执行一个
+startup函数（The executable file specifies this routine as the starting address,and it setups the command-line argument and env argument)，进而再调用main函数并
+以main函数的返回值调用exit函数（就像exit(main() )一样）。
+                   
+
+进程如何退出？
+进程退出的8种方式，前5种为正常的退出方式，后3种为异常的退出方式：
+	return from main
+	calling exit( firstly calls the exit handlers and then close all open 
+			streams )
+	calling _exit(POSIX) or _Exit(ISO C)
+	return form last thread
+	calling pthread_exit
+
+	calling abort
+	receipt of a signal
+	response of the last thread to a cancellation request
+
+
+exit 函数会进行一些清理后调用_exit or _Exit返回内核（如调用fclose函数清理标准I/O），_exit与_Exit直接返回到内核。(ManPage: Whether it  flushes  standard I/O  buffers  and  removes  temporary  files  is implementation-dependent.  On the other hand, it does  close  open file  descriptors)
+
+C99中定义了隐含的retur语句，并且main默认返回0。可以使用atexit()函数注册
+（at most 32, default）exit handlers，这些handlers在exit中被调用（in reverse order of 
+their registration)并在调用exec函数后清除所有注册函数（POSIX）。
+
+                  +-----------------------------------------------+
+                  |  / user func                                  |
+                  | /             \          / exit handler       |
+            ------|-               \        /                     |
+            |     | \               v      /                      |
+            |     |  \  main  -----> exit ---- exit handler       |
+            |     |                 ^  |   \                      |
+            |     |                /   |    \                     | user process
+            |     |    C start-up      |      standard I/O cleanup|
+            |     +-----------------------------------------------+
+            |           ^              | _exit or _Exit
+            |           |              |
+            |           | exec         |
+            |           |              v
+            |      +----+--------------------------------------+
+            |      |                                           |
+            |      |                                           |
+            ------>|           kernel                          |
+        _exit or _Exit                                         |
+                   |                                           |
+                   +-------------------------------------------+
+                          
+环境变量：
+startup 函数（该函数调用了main函数）会设置command-line list与environment list。可用全局变量environ (stdlib.h)遍历传递给进程的所有环境变量（"name=value"的形式）。(This is part of the normal operation of the UNIX system shells, which call exec function to create new program)
+
+
+
+                          environment         environment
+                                list             strings
+            +-----+        +-------+
+            |     |------> |       |------->HOME=/home/... 
+            +-----+        |-------|
+            environ        |       |------->PATH=:/usr/bin:...
+                           |-------|
+                           |       |------->...  
+                           |-------|
+                           |       |------->... 
+                           |-------|
+                           | NULL  |
+                           +-------+
+
+
+Some environment variables are defined by POSIX.1 in the SUS; ISO C doesn't define any environment variables.
+
+ISO C defines a function that we can use to fetch values from the environment: getenv() function;
+
+Functions that are supported by the various standards and implementations:
+	getenv  (ISO, POSIX.1)
+	putenv: (XSI) takes a string of the form name=value and places it in the environment list ( free to place the string (may be a local string which cause error) passed to it directly into the environment.
+	setenv: (POSIX.1) set name to value, this function allocate memory to create the name=value string from its arguments.
+	unsetenv (POSIX.1) 
+	clearenv
+
+
+
+
+
+C程序的内存布局：
+典型的C内存布局包括：Text segment，Initialized data segment，Uninitialized data segment（block started by symbol），Stack，Heap
+
+                   report the size of different segments using the 'size' command
+                   high address
+                              +-------------------+
+                              |                   |     command-line arguments
+                              |                   | <-- and environment variables
+                              |-------------------|
+                              |    stack  |       |
+                              |           |       |
+                              |           v       |
+                              |             ^     |
+                              |             |     |
+                              |    heap     |     |
+                              |-------------------|
+                              | uninitialized data|
+                              |    (bss)          | initialized to zero by exec, not stored in disk file
+                              |-------------------|
+        read from ELF    ---> | initialized data  |
+            by exec    --|    |-------------------|
+                         ---> |    text           | usually sharable and read-only
+                              +-------------------+
+                   low address
+
+
+
+内存分配：
+ISO C specifies several functions for memory management (stdlib.h, usually using best-fit or first-fit memory allocation strategy):
+        malloc, calloc, realloc, free
+
+The allocation routines are usually implemented with the sbrk system call. This system call expands (or contracts) the heap of the process, but most versions of malloc and free never decrease their memory size, the space that we free is kept in the malloc pool. The pointer returned by the three allocation functions is guaranteed to be suitably aligned so that it can be used for any data object.
+
+Most implementations allocate a little more space than is requested and use the additional space for record keeping. Overwriting of the allocated block may cause catastrophic errors for this program or others!!
+
+alloca function allocate memory on stack!
+
+
+setjmp and longjmp functions:
+These two functions perform nonlocal  goto to another function, branching back through the call frames to a function that is in the call path of the current function; It is common to be five or more levels down from where we want to return to and it becomes messy if we have to code each function with a special return value that tells it to return one level (useful for handling error conditions that occur in a deeply nested function call).
+
+	int setjmp( jmp_buf env );
+                 return: 0 if called directly, nonzero if returning from a call to longjmp
+
+	void longjmp( jmp_buf env, int val );
+
+Automatic, Register and Volatile variables
+
+What are the states of the automatic variables and register variables in the main function? It depends ( implementation and compiler optimization)!! If you have an automatic variable that you don't want rolled back, define it with the volatile attribute. Global or static variables are left alone when longjmp is executed.  Differences between auto variables, reg variables and volatile: 当允许编译器的优化时，变量放在寄存器中，当指定volatile关键字时，该变量一定放在内存当中。
+
+
+getrlimit and setrlimit Functions:
+Some resource limits of a process can be queried and changed by the getrlimit and setrlimit functions (XSI). Only a superuser process can raise a hard limit!! Lowering of the hard limit is irreversible for normal users.
+
+The resource limits for a
+process are normally established by process 0 when the system is initialized and then inherited by each
+successive process
+
+	int getrlimit( int resource, struct rlimit *rlptr )
+	int setrlimit( int resource, const struct rlimit *rlptr )
+
+The resource limits affect the calling process and are inherited by any of its children. So the command ulimit has to be built-in command, so as the umask and cd command.
+

@@ -1,0 +1,355 @@
+
+下面来说说线程的控制，其中包括如何设置线程的属性及线程同步的属性。另外还会介绍下线程特定数据及线程如何与信号及fork函数(how to interact with process-based system call)交互。
+
+
+12.2
+SUS（Single UNIX Specification）定义了几个与线程相关的资源限制，可以使用sysconf查询：
+	PTHREAD_DESTRUCTOR_ITERATIONS: maximum number of times an implementation will try to destroy he thread-specific data when a thread exits
+	PTHREAD_KEYS_MAX: maximum number of keys that can be created by a process
+	PTHREAD_STACK_MIN: minimum number of bytes that can be used for a thread's stack
+	PTHREAD_THREADS_MAX: maximum number of threads that can be created in a process
+	
+
+12.3
+线程的属性设置：
+在使用pthread_create创建线程时，可以传递一个指向pthread_attr_t结构的指针到该函数，以代替默认的线程属性。对pthread_attr_t变量要使用pthread_attr_init及pthread_attr_destroy (free dynamic memory or invalidate the pthread_attr_t object)进行初始化及销毁。
+
+POSIX.1定义的几个线程属性有（另外还定义有real-time threads option）：
+
+	detachstate：线程结束后是否立即释放资源
+	guardsize：在线程栈之后的保护缓冲区大小
+	stackaddr：线程栈的起始地址
+	stacksize：线程栈的大小
+
+由于pthread_attr_t结构是不透明的，因此必须使用相关的函数接口进行属性的设置。
+
+关于detachstate属性：
+
+	pthread_attr_getdetachstate: 得到线程的detachstate属性（包括PTHREAD_CREATE_DETACHED及PTHREAD_CREATE_JOINABLE）
+	pthread_attr_setdetachstate: 设置线程的detachstate属性
+
+		err = pthread_attr_init(&attr);
+		...
+		err = pthread_create( &tid, &attr, fn, arg );
+
+		/* if destroy fails, just ignore the return value from the call to pthread_attr_destroy (we would have to destroy the thread we just created, which is possibly already running)
+		pthread_attr_destroy(&attr)
+
+与线程栈相关的属性（required for XSI-conforming system, check for _POSIX_THREAD_ATTR_STACKADDR and _POSIX_THREAD_ATTR_STACKSIZE）：
+
+	pthread_attr_getstack(), pthread_attr_setstack(): manage both the stackaddr and the stacksize attributes. 设置进程栈。进程的虚拟地址是确定的，要根据应用程序的实际情况改变线程栈的大小，如线程很多时减小线程栈大小（因为所有线程栈共享虚拟地址），要分配大的线程局部变量时则要相应地增大。
+	传递给setstack的内存块地址是进程栈可使用的最低内存虚拟地址，但不一定是栈的开头（由处理器结构所定义，有可能栈从高地址开始，pthread_attr_setstackaddr函数对该参数的解释就具有此二义性）。
+
+	pthread_attr_getstacksize(), pthread_attr_setstacksize(): when you want to change the default stack size but don't want to deal with allocating the thread stacks on you own;
+
+	pthread_attr_getguardsize(), pthread_attr_setguardsize(): 设置线程栈的保护缓冲区，防止栈溢出。对这个缓冲区的写入会产生错误（如产生signal）。默认为PAGESIZE，设置为0时禁止该属性，当设置stackaddr或stacksize时，系统自动将guardsize设置为0；
+
+
+Attributes that not represented by the pthread_attr_t structure:
+	cancelability state;
+	cancelability type
+	concurrency level;
+
+设置concurrency level：level越高则一个内核线程对应越少的用户线程，the number of user-level threads that can run at a given time（貌似在操作系统的课程中有读过内核线程与用户线程的区别），设置为0时由系统决定，取消上一次的设置。pthread_getconcurrency(), pthreadf_setconcurrency()（calling these functions is only a hint to the system）。
+
+
+12.4
+线程同步的属性设置：
+Mutex（pthread_mutexattr_t) 的属性：两个较常见的属性为process-shared，type。
+
+	process-shared (XSI-conforming): 当设置为PTHREAD_PROCESS_SHARED时，进程可以使用mmap共享内存，在该内存上分配的mutex对象可以用于进程的同步。默认为PTHREAD_PROCESS_PRIVATE，provide more efficient mutex implementation and the mutex can be accessed by multiple threads within a process。
+	
+	pthread_mutexattr_getshared(), pthread_mutexattr_setshared()
+
+	type：
+		PTHREAD_MUTEX_NORMAL: doesn't do any special error checking or deadlock detection.
+		PTHREAD_MUTEX_ERRORCHECK: returns error with an incorrect usage of mutex
+		PTHREAD_MUTEX_RECURSIVE: recurisive lock of a mutex
+		PTHREAD_MUTEX_DEFAULT: mapped to one of the other three type
+
+		
+	pthread_mutexattr_gettype(), pthread_mutexattr_settype();
+	注意使用Condition时不要使用Recursive Mutex。If a recursive mutex is locked multiple times and used in a call to pthread_cond_wait, the condition can never be satisfied, because the unlock done by pthread_cond_wait doesn't release the mutex.
+
+
+
+Recursive lock的使用（不改变函数接口）：In situations such as a library needs to call a function outside the library, which then might call back into the library.
+
+          x->lock must be a recursive lock otherwise we get a deadlock
+
+          +------+
+          | main |
+          +------+
+             |
+             |
+           func1(x)  --------> func1 
+             |                  |
+             |            pthread_mutex_lock(x->lock)
+             |                  |
+             |                 func2(x) --------------------+
+             |                  |                           |
+             |                  |                           |
+             |            pthread_mutex_unlock(x->lock)     |
+             |                                              |
+           func2(x) --------------------------------------func2
+                                                            |
+                                            pthread_mutex_lock(x->lock)
+                                                       |
+                                                       |
+                                                       |
+                                            pthread_mutex_unlock(x->lock)
+
+
+
+          +------+
+          | main |
+          +------+
+             |
+             |
+           func1(x)  --------> func1 
+             |                  |
+             |            pthread_mutex_lock(x->lock)
+             |                  |
+             |              func2_locked(x) ----------------+
+             |                  |                           |
+             |                  |                           |
+             |            pthread_mutex_unlock(x->lock)     |
+             |                                              |
+           func2(x) --------------func2                     |
+                                                            |
+                       pthread_mutex_lock(x->lock)          |
+                                  |                         v
+                            func2_locked(x) -----------> func2_locked(x)    
+                                  |
+                     pthread_mutex_unlock(x->lock)
+                                       
+If we didn't have to leave the interfaces to the library functions unchanged, we could have added a second parameter to each function to indicate whether the structure is locked by the caller.
+
+
+	retry(void *arg)
+	{
+		pthread_mutex_lock(&mutex);
+		...
+		pthread_mutex_unlock(&mutex);
+	}
+
+
+	mina(void)
+	{
+		/* set mutex to be recursive */
+
+		pthread_mutex_lock(&mutex);
+		if (condition)
+		{
+			/* retry function can be called if we can't create a thread or */
+			/* when the scheduled time to run the function has already passed */
+			/* so we need a recursive lock */
+			timeout( &when, retry, (void *)arg);
+		}
+		pthread_mutex_unlock(&mutex);
+	}
+
+Reader-Writer Lock（pthread_rwlockattr_t)与Condition（pthread_condattr_t)的属性为process-shared属性，与Mutex的类似。
+
+
+
+12.5
+线程安全函数－可重入函数（_POSIX_THREAD_SAFE_FUNCTIONS: whether supports thread-safe functions）：
+Thread-safe function differ from the async-signal safe function.
+	alternate thread-safe functions:
+		gmtime_r,	ctime_r,	localtime_r,	...
+
+
+如何写线程安全函数：
+	不要使用静态局部变量，由调用者提供数据缓冲区
+	使用mutex互斥访问数据（或使用线程私有数据）
+	使用Recursive lock（因为有可能在信号处理函数中调用自身）
+	调用thread-safe函数
+
+
+可以不用使用reader-writer lock；因为：用80%的努力优化那20%经常运行的代码
+	getenv_r (...)
+	{
+		/* env_mutex is used to protect the environ variable */
+
+		pthread_mutex_lock(&env_mutex);
+
+		/* if a signale handler interrupts here, it may cause a deadlock by 
+		   causing getenv_r again, so env_mutex is a recursive lock */
+		/* search the environ variable */
+
+		pthread_mutex_unlock(&env_mutex);
+
+	}
+
+
+Manage FILE objects in a thread-safe way:
+
+	ftrylockfile(), flockfile(), funlockfile(): obtain a recursive lock associated with a give FILE object. It is required that all standard I/O routines that manipulate FILE objects behave as if they call flockfile and funlockfile internally. Expose the locking to application allows application to compose multiple calls to standard functions into atomic sequences (using the getchar_unlocked(), getc_unlocked() function). All standard I/O routines might be implemented to be thread-safe.
+
+
+
+12.6
+线程特定数据：
+	pthread_key_create(); create a key and register a destroy function. When the thread exits normlly, by calling pthread_exit() or returning from the function, the destructor is called (a maximum of PTHREAD_DESTRUCTOR_ITERATIONS attempts are made because the destructor may create new key). 
+	
+	A thread can allocate multiple keys (at most PTHREAD_KEYS_MAX) for thread-specific data. pthread_key_delete(), break the association of a key with the data (will not invoke the destructor function associated with he key).
+
+	Using the pthread_once() function to call the pthread_key_create() function once (along with the pthread_once_t variable, initialized to PTHREAD_ONCE_INIT).
+		pthread_key_t key;
+		pthread_once_t init_done = PTHREAD_ONCE_INIT;
+
+		thread_init(void)
+		{
+			pthread_key_create( &key, destructor );
+		}
+
+		threadfunc( void *arg)
+		{
+			pthread_once( &init_done , thread_init );
+			...
+		}
+
+
+	Call pthread_setspecific() function to set the thread-specific data and  pthread_getspecific() to obtain the address of the data.
+
+		getenv(const char *name)
+		{
+
+			pthread_once( &init_done , thread_init );
+
+			/* env_mutex is used to protect the environ variable */
+			pthread_mutex_lock(&env_mutex);
+
+			envbuf = (char *)pthread_getspecific(key);
+	
+			
+			pthread_mutex_unlock(&env_mutex);
+
+		}
+
+大概的实现原理（由内核维护以下数据结构，以最多128个key为例）：
+                                                                   
+                  +--------------+                 +---------------+
+          key[0]  |   flag       |                 |               |
+                  | pointer      |                 |               |
+                  +--------------+                 |  thread info  |
+                  |   flag       |\                |               |
+          key[1]  | pointer      | \               |               |
+                  +--------------+  \              +---------------+
+          ...     |              |   \   pkey[0]   |               |
+                  |              |    \            +---------------+
+          key[128]|              |     \ pkey[1]   |   pointer     | ---->+-------+
+                  +--------------+                 +---------------+      |       |
+                                                   |               |      | data  |
+               maintained by process               |               |      +-------+
+                                                   +---------------+
+
+                                                maintained by thread
+
+
+12.7
+Cansel Options:
+
+	pthread_setcancelstate(): PTHREAD_CANCEL_ENABLE (default, request remains pending, act on next cancellation point) or PTHREAD_CANCEL_DISABLE.
+	pthread_testcancel(): add your own cancellation points to the program.
+	pthread_setcanceltype(): PTHREAD_CANCEL_DEFERRED or PTHREAD_CANCEL_ASYNCHRONOUS (act on the request at any time)
+
+
+
+
+12.8 Threads and Signals
+	Each thread has its own signal mask, but share the same signal
+	disposition and the alarm timer.
+	
+	Signals are dilivered to a single thread in the process. The signals
+	are delivered to arbitrary thread except that the signals related to a
+	hardware fault or expiring timer will be sent to the spcified thread
+	caused it.
+
+	pthread_sigmask: block signal from delivery. (sigprocmask)
+	pthread_kill: send a signal to a thread. (kill)
+
+	sigwait: wait for one or more signals. Before calling sigwait, a thread
+	must block the signals it is waiting for to prevent erroneous behavior. (sigsuspend)
+
+	Use sigwait to treat asynchronously-generated signals in a synchronous
+	manner ( an alternative to signal handler ). Only one thread will return
+	from sigwait when the sig is delivered if multiple threads are blocked
+	in the call. We can prevent the signals from interrupting the threads by
+        adding them to each thread's signal mask. Then we can dedicate specific 
+        threads to handling the signals
+
+                thr_fn(...)
+                {
+                	/* waits for specific signals */
+                	sigwait(&mask, &signo);
+                	switch( signo)
+			{
+				/* handles the signal */
+				case SIGQUIT:
+					pthread_mutex_lock( &lock );
+					flag = 1;
+					pthread_mutex_unlock( &lock );
+					pthread_cond_signal( &wait );
+					return;
+			}
+                	
+		}
+
+
+		main()
+		{
+			/*blocks the signals, prevents from interrupting the main thread */
+
+			pthread_mutex_lock( &lock );
+			while( flag == 1)
+				/* we need the while loop because pthread_cond_broadcast 
+				may wake up the thread even though the flag is not set */
+
+				pthread_cond_wait (&wait, &lock );
+			pthread_mutex_unlock( &lock);
+		}
+
+	If a sig is being caught and a thread is waiting for the sig in a call to
+	sigwait, it will return from sigwait or invoke the signal handler, not
+	both.
+
+        Alarm timers are a process resource, and all threads share the same set of alarms.
+
+	In Linux, threads are implemented with processes, so kill function would
+	not send a signal to a thread except the main thread.
+
+
+12.9
+Thread and fork():
+	When a thread call fork(), the resulted child consists of only a copy of 
+	thread that called fork in the parent, but also inherits the the state of 
+	every mutex, reader-wirter lock, and condition variable from the parent 
+	process. To clean up the lock state, use the pthread_atfork() function. If
+	the child calls exec immediately, there is no need to clean up.
+
+	pthread_atfore( void (*prepare)(void ), void (*parent)(void),
+			void (*child) (void ) );
+                            |
+                            |
+                            V
+	fork()              
+	{                    
+		/* calls prepare function, acquires all locks of the caller */
+
+		/* create the chile process */
+		
+		/* in the child's context, calls child function, releases all its locks */
+		/* in the parent's context, calls parent function, releases all locks  */
+	}
+
+
+	When multiple fork handlers are used, the order in which the handlers are called differs. The parent and child fork handlers are called in the order in which they were registered, whereas the prepare fork handlers are called in the opposite order from which they were registered. This allows multiple modules to register their own fork handlers and still honor the locking hierarchy.
+
+
+	There is no need to clean up the state of condition variables on some implementation because it uses a global lock to protect the condition variable data structure. If an implementation uses a lock as part of the implementation of condition variables, there is no portable way to clean up its state.
+
+
+12.10 
+	use pread and pwrite functions to solve the problem of concurrent threads reading and writing.
