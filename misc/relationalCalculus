@@ -1,0 +1,17 @@
+关系演算（nonprocedural query language）以数理逻辑中的谓词演算为基础，可分为元组关系演算与域关系演算。
+元组关系演算（Tuple relational calculus）：
+
+{ t | P(t) , P为谓词，t为元组变量 }
+
+如上定义的关系演算是不安全的，因为可以产生无限的关系。如{ t |  ¬ R(t) } 表示所有不属于R的元组。这样的表达式称为不安全表达式，反之称之为安全表达式（定义一个有限的符号集dom(Φ)）。
+
+    An expression {t | P (t )} in the tuple relational calculus is safe if every component of t appears in one of the relations, tuples, or constants that appear in P
+
+典型的元组关系演算语言是E.F.Codd提出的ALPHA语言，下图给出一查询例子（前束范式）
+域关系演算（Domain relational calculus）：
+
+以元组变量的分量，即域变量作为谓词变元的基本对象；
+
+{ <x1, x2, …, xn>  | P(x1, x2, …, xn), xn represent domain variables }
+
+QBE是1975年由M.M.Zloof提出的域关系演算语言，是一种高度非过程化的基于屏幕表格的查询语言。QBE要求示例元素下面加下划线，查询条件则不需要加下划线：

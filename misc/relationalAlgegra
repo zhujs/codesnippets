@@ -1,0 +1,63 @@
+关系代数是关系数据库中的一种（procedural query language）抽象查询语言，是各种关系查询语言（如SQL）的理论基础，关系代数的运算对象是关系，运算结果也为关系。最基本的关系运算有五种：并，差，笛卡尔积，选择（select）以及投影（project）。其它的各种操作（除，连接，交）可以由这五种基本的运算来表达，用以简化查询。
+
+Relational algebra
+    Relational algebra
+
+基本的关系运算
+
+    Union：the Relations have the same degree and the same domain
+
+R ∪ S  = {t | t ∈ R or t ∈ S}
+
+    Except operation：the Relations have the same degree and the same domain
+
+R – S  = {t | t ∈ R and t  ∉ S}
+
+    Cartesian-Product：
+
+R x S = {t q | t ∈ R and q ∈ S}
+
+以上三种运算为binary operator，涉及到两个关系（两个二维表）。
+
+    选择运算：σF(R) = { t | t ∈ R, F(t) = 'true' }（从行的角度进行运算，F为selection predicate）
+
+    投影运算：πA(R) = { t[A] | t ∈ R }（从列的角度进行运算，A为R的部分属性列，选择若干列组合关系，并删除重复）
+
+从上述五种运算得到的小启示：前三种操作涉及到两个表的查询（这样就可以查询多个表），后两种涉及到单一表的查询（分别从行与死的角度进行操作），进而可以作为最基本的查询操作。
+额外的关系运算符
+
+    可以使用Rename Operation对关系运算表达式产生的表进行重命名：ρx(E)
+    Intersection：（略）
+    连接运算：（θ连接）从笛卡尔积中选取属性间满足一定条件的元组。等值连接，R ⋈ S ＝ { t q | t ∈ R and q ∈ R and t[A] = t[B] }；自然连接是特殊的等值连接，两个关系中进行比较的属性组必须相等，即A ＝ B，并且在结果中把重复的属性列去掉（其它的连接不去除重复列）；外连接，把在θ连接中舍弃的元组（原来在R或S中）保存在结果关系中，其它属性值为null，就称作外连接（保留R的元组就为左外连接，保留S的元组称为右外连接）
+    半连接：R ⋉ S = { t : t ∈ R, s ∈ S, fun (t ∪ s) }
+    反连接：R ▷ S = { t : t ∈ R and ¬∃ s ∈ S : fun (t ∪ s) }
+    除运算：（有点像R x S的逆运算，模式相减，乘不溢出）适合如“共同”，“所有”等查询；
+
+R ÷ S ＝ T ＝ Max{ T' | S X T' ⊆ R }，R(X,Y)，S(Y,Z)
+
+基本关系代数操作实现除运算
+    基本关系代数操作实现除运算
+
+    Generalized Projection: extends the projection operation by allowing arithmetic functions to be used in the projection list.
+
+    Aggregate operation in relational algebra, its general form( G-group by, F-aggregate function, A-attribute, E-relational algebra expression ):
+
+G1, G2, …, Gn g F1( A1), F2( A2),…, Fn( An) (E)
+Null values
+
+Represent for missing value or unknown value.
+
+    If arithmetic expression contains NULL, then returns a NULL
+    Aggregate Function just ignores null values
+    For duplicate elimination and grouping, null is treated like any other value, and two nulls are assumed to be the same
+
+删除，插入与更新
+
+这三种操作可以使用赋值运算符来表达：
+
+        Deletion: r  ← r – E ( r is a relation, E is a relational algebra query )
+        Insertion: r ←  r  ∪ E ( account ← account ∪ {(“A-973”, “Perryridge”, 1200)}
+
+Updating: Use the generalized projection operator to do this task
+
+account ← πaccount_number, branch_name, balance * 1.05 (account)
