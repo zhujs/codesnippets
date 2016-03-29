@@ -1,0 +1,106 @@
+Unix平台下5种I/O模型（Unix网络编程）
+
++------------+
+|blocking I/O|
++------------+
+          App                       Kernel
+                                                      
+^       recvfrom   ----------->   no datagram ready       ^
+|                                       |                 |
+|                                       |                 |
+|                                       |            wait for data
+|                                       v                 |
+process                           datagram ready          v
+blocks                            copy datagram            
+|                                       |                 ^
+|                                       |                 |
+|                                       |            copy data from
+|                                       |           kernel to user
+v                                       v                 |
+         process    <-----------    copy complete         v
+        datagram                                          
+                                                      
++---------------+
+|nonblocking I/O|
++---------------+
+          App                       Kernel
+                                                      
+^       recvfrom   ----------->   no datagram ready       ^
+|                  EWOULDBLOCK          |                 |
+|                 <------------         |                 |
+|         ...                           |            wait for data
+|         ...                           |                 |
+|                                       v                 |
+process                           datagram ready          v
+polls   recvfrom   ----------->   copy datagram            
+|                                       |                 ^
+|                                       |                 |
+|                                       |            copy data from
+|                                       |           kernel to user
+v                                       v                 |
+         process    <-----------    copy complete         v
+        datagram                                          
+
++----------------+
+|I/O multiplexing|
++----------------+
+          App                       Kernel
+                                                      
+^       select    ------------>   no datagram ready       ^
+|                                       |                 |
+blocks in                               |                 |
+call toselect                           |            wait for data
+|                                       |                 |
+|                                       v                 |
+v                                 datagram ready          v
+^       recvfrom   ----------->   copy datagram            
+|                                       |                 ^
+|                                       |                 |
+|                                       |            copy data from
+|                                       |           kernel to user
+|                                       v                 |
+v        process    <-----------    copy complete         v
+        datagram                                          
+
++-----------------+
+|signal driven I/O|
++-----------------+
+          App                       Kernel
+                      sigaction                       
+^       SIGIO      ------------->                         ^
+|      handler     <-------------                         |
+|                     return                              |
+process                                              wait for data
+continues                                                 |
+|                  deliver SIGIO                          |
+v   signal handler <------------  datagram ready          v
+^       recvfrom      -------->   copy datagram            
+|                                       |                 ^
+|                                       |                 |
+|                                       |            copy data from
+|                                       |           kernel to user
+v                                       v                 |
+         process    <-----------    copy complete         v
+        datagram                                          
+                                                      
++----------------+
+|asynchronous I/O|
++----------------+
+          App                          Kernel
+                        system call                       
+^      aio_read       ------------->  no datagram ready      ^
+|                     <-------------       |                 |
+|                        return            |                 |
+|                                          |            wait for data
+|                                          |                 |
+process                                    v                 |
+continues                            datagram ready          v
+|                                    copy datagram            
+|                                          |                 ^
+|                                          |                 |
+|                                          |            copy data from
+|                                          |           kernel to user
+v                     deliver signal       v                 |
+    signal handler  <----------------  copy complete         v
+      process        specified in aio_read                 
+     datagram                                       
