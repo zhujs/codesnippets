@@ -31,3 +31,7 @@ kill -l
 
 # 将$HOME/src/目录下面的所有文件，复制到远程主机的$HOME/src/目录
 cd && tar czv src | ssh user@host 'tar xz'
+
+
+# 递归下载某目录（选项见man page）
+wget -c -r -np -L -p  -nH http://www.xxx.com/yyy/
