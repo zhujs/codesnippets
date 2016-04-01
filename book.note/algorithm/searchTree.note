@@ -1,11 +1,11 @@
 磁盘的读写：
-	1. 查找数据所在的柱面（查找时间）
-	2. 确定磁盘盘面号
-	3. 盘片旋转，确定数据所在磁道，一次读取一个或多个页面（等待时间，磁盘转）
-	4. 传输数据（传输时间）
+    1. 查找数据所在的柱面（查找时间）
+    2. 确定磁盘盘面号
+    3. 盘片旋转，确定数据所在磁道，一次读取一个或多个页面（等待时间，磁盘转）
+    4. 传输数据（传输时间）
 
 
-		           +------+
+                           +------+
                            | 1000 |
                            +------+
                       /         | .. \  \
@@ -16,123 +16,118 @@
        +------+
        | 1000 |  ...
        +------+
+    B树对数据文件建立索引文件（文件中每个记录为关键字+索引号）
 
-	B树对数据文件建立索引文件（文件中每个记录为关键字+索引号）
 
 一个高度为2，分支因子为1001的B树包含多于10亿个关键字，查询某一关键字至多只要2次磁盘读写（假设一个B树结点可以在一次磁盘读写中读入内存，包含1000个索引项），该树可以作为包含10亿个关键字文件的索引文件。
 
-         
-         
 
-B树：
-
+B树：http://en.wikipedia.org/wiki/B-tree
 B-tree is a tree data structure that keeps data sorted and allows searches, sequential access, insertions, and deletions in logarithmic time. The B-tree is a generalization of a binary search tree in that a node can have more than two children.
 
-wikipedia: http://en.wikipedia.org/wiki/B-tree
 
-B树与二叉查找树相比（用相同数据构成的树），是一种多叉平衡查找树，其深度相对较低，可以提高查找效率，特别适用于数据库与文件系统中，用以降低磁盘I/O操作次数。
+与二叉查找树相比（用相同数据构成的树），B树是一种多叉平衡查找树，其深度相对较低，可以提高查找效率，特别适用于数据库与文件系统中，用以降低磁盘I/O操作次数。
 
 用阶定义的B树：一棵m阶B树有如下特点
-	1. 树中每个结点至多有m个孩子（m棵子树）；
-	2. 若根不是叶子结点，至少有两个孩子（2棵子树）；
-	3. 除根结点和叶子结点外，每个非终端结点至少有 ceil(m/2)个孩子；
-	4. 叶子结点出现在同一层（代表查找失败的虚拟结点）
-	5. 非终端结点包含n个关键字信息
-		(n, P0, K1, P1, ... Kn, Pn)
-	   其中Ki(i=1..n)为关键字且Ki<Kj(i<j)，Pi(i=0...n)为指针（注意多叉
-	   排序树）， ceil(m/2) - 1 <= n <= m-1，因此子树个数为 
-	   ceil(m/2) <= n+1 <= m，满足性质1，性质3
+    1. 树中每个结点至多有m个孩子（m棵子树）；
+    2. 若根不是叶子结点，至少有两个孩子（2棵子树）；
+    3. 除根结点和叶子结点外，每个非终端结点至少有 ceil(m/2)个孩子；
+    4. 叶子结点出现在同一层（代表查找失败的虚拟结点）
+    5. 非终端结点包含n个关键字信息
+        (n, P0, K1, P1, ... Kn, Pn)
+       其中Ki(i=1..n)为关键字且Ki<Kj(i<j)，Pi(i=0...n)为指针（注意是多叉
+       排序树）
+       子树个数为n+1，ceil(m/2) <= n+1 <= m，满足性质1，性质3
 
 与度相关的性质（B树至少是半満的，B*树是至少2/3满）:
-	B树的最小度数（至少有t个指针域个数）t>=2;
-	每个非根结点至少t-1个关键字，至少t个子女，非叶子根结点至少包含一个关键字；
-	每个结点至多2t-1个关键字；
+    B树的最小度数（指针域个数）t>=2;
+    每个非根结点至少t-1个关键字，至少t个子女，非叶子根结点至少包含一个关键字；
+    每个结点至多2t-1个关键字；
 
 
-B树的高度：树的总结点数n >= 1+(t-1)*(2 * t^0 + 2 * t^1 + ... + 2 * t^(h-1) )，h为树的高度（每个非根结点至少为t-1个关键字）
-	==> t^h <= (n+1) / 2
-	==> h <= logt ((n+1) / 2)
+B树的高度：树的关键字个数n >= 1+(t-1)*(2 * t^0 + 2 * t^1 + ... + 2 * t^(h-1) )，h为树的高度（每个非根结点至少为t-1个关键字）
+    ==> t^h <= (n+1) / 2
+    ==> h <= logt ((n+1) / 2)
 
 
 #define order 3
 
 typedef struct BTNode {
-	int keynum;			// 结点中关键字大小
-	struct BTNode *parent; 
+    int keynum;         // 结点中关键字大小
+    struct BTNode *parent; 
 
-	KeyType key[order + 1];
-	struct BTNode *ptr[order + 1];
-	Record * recptr[order + 1];	//记录指针向量
+    KeyType key[order + 1];
+    struct BTNode *ptr[order + 1];
+    Record * recptr[order + 1]; //记录指针向量
 }BTNode, *BTree;
 
 
 B树的查找：
-	B-TREE-SEARCH( x , k )
-	{
-		// 在x指向的B树中搜索关键字k
-		i <- 1
+    B-TREE-SEARCH( x , k )
+    {
+        // 在x指向的B树中搜索关键字k
+        i <- 1
 
-		// n[x]为关键字个数，keyi[x]为x结点中包含的第i个结点
-		while i <= n[x] and k > keyi[x]
-			do i <- i+1
+        // n[x]为关键字个数，keyi[x]为x结点中包含的第i个结点
+        while i <= n[x] and k > keyi[x]
+            do i <- i+1
 
-		if i<= n[x] and k = keyi[x]
-			then return(x,i)
+        if i<= n[x] and k = keyi[x]
+            then return(x,i)
 
-		if leaf[x]
-			then return NIL
-			// 在子树中递归查找k 
-			else DISK-READ(ci[x])
-				return B-TREE-SEARCH( ci[x], k )
-	}
+        if leaf[x]
+            then return NIL
+            // 在子树中递归查找k 
+            else DISK-READ(ci[x])
+                return B-TREE-SEARCH( ci[x], k )
+    }
 
 
 
 B树的插入：
-	插入关键字到叶子结点，当沿着树往下查找其所属位置，分裂每个遇到的満结点，避免在分裂插入结点时，分裂动作沿着树向上传播（想像其父结点已经是满结点）
-	B-TREE-INSERT(T, k)
-		r <- root [T]
-		if n[r] = 2t - 1	//根结点为満结点，树的高度加1
-			then s <- ALLOCATE-NODE()
-			root[T] <- s
-			leaf[s] <- FALSE
-			n[s] <- 0
-			c1[s] <- r	//r是s的第一个
-			
-			// 分裂结点r，其中c1[s] = r结点
-			B-TREE-SPLIT-CHILD( s, 1, r ) 
-			B-TREE-INSERT-NONFULL( s, k )
-		else B-TREE-INSERT-NONFULL( r, k) // 根结点不満，递归插入元素k，该调用保证第一个参数为非满结点
+    插入关键字到叶子结点，当沿着树往下查找其所属位置，分裂每个遇到的満结点，避免在分裂插入结点时，分裂动作沿着树向上传播（想像其父结点已经是满结点）
+    B-TREE-INSERT(T, k)
+        r <- root [T]
+        if n[r] = 2t - 1    //根结点为満结点，树的高度加1
+            then s <- ALLOCATE-NODE()
+            root[T] <- s
+            leaf[s] <- FALSE
+            n[s] <- 0
+            c1[s] <- r  //r是s的第一个
+            
+            // 分裂结点r，其中c1[s] = r结点
+            B-TREE-SPLIT-CHILD( s, 1, r ) 
+            B-TREE-INSERT-NONFULL( s, k )
+        else B-TREE-INSERT-NONFULL( r, k) // 根结点不満，递归插入元素k，该调用保证第一个参数为非满结点
 
 
 
 B树的删除：
-	当沿着树往下查找关键字时，保证递归删除降到一个至少有t（不是t-1喔）个关键字的子树上，避免在删除关键字时，把父结点一个关键字下移时，父结点关键字个数少于t-1（想像其父结点（非根）只有t-1个关键字）
+    当沿着树往下查找关键字时，保证递归删除降到一个至少有t（不是t-1喔）个关键字的子树上，避免在删除关键字时，把父结点一个关键字下移时，父结点关键字个数少于t-1（想像其父结点（非根）只有t-1个关键字）
 
-	1. 当删除关键字位于叶子结点x，从x中删除k（由上，我们保证x至少有t个关键字）
-	2. 当删除关键字k位于内结点x：
-		a. 如果前1个子树至少t个关键字，找到k的前趋k'取代k，递归删除k
-		b. 如果后1个子树到少t个关键字，找到后继k'取代k，递归删除k
-		c. 如果k的前后子树都只有t-1个关键字，合并k与后子树到前子树，在前子树中删除k，释放后子树根结点
+    1. 当删除关键字位于叶子结点x，从x中删除k（由上，我们保证x至少有t个关键字）
+    2. 当删除关键字k位于内结点x：
+        a. 如果前1个子树至少t个关键字，找到k的前趋k'取代k，递归删除k
+        b. 如果后1个子树到少t个关键字，找到后继k'取代k，递归删除k
+        c. 如果k的前后子树都只有t-1个关键字，合并k与后子树到前子树，在前子树中删除k，释放后子树根结点
 
-	3. k不在内结点x，且递归子树ci[x]只有t-1个关键字，执行a或b保证降至一个包含至少t个关键字的结点
-		a. ci[x]的一个相邻兄弟包含至少t个关键字（下移x中一个元素，上移相邻兄弟的一个元素）
-		b. ci[x]的所有相邻兄弟只有t-1个关键字（合并k与兄弟及ci[x]）
+    3. k不在内结点x，且递归子树ci[x]只有t-1个关键字，执行a或b保证降至一个包含至少t个关键字的结点
+        a. ci[x]的一个相邻兄弟包含至少t个关键字（下移x中一个元素，上移相邻兄弟的一个元素）
+        b. ci[x]的所有相邻兄弟只有t-1个关键字（合并k与兄弟及ci[x]）
 
 Note: 当根结点成为一个不含任何关键字的内结点时（2c, 3b）则x要被删除，c1[x]成为新的根
 
 
 B+树：是应文件系统所需而产生的一种BTree的变形树（可以高效顺序遍历元素）。
-
-wikipedia: http://en.wikipedia.org/wiki/B%2B_tree
+http://en.wikipedia.org/wiki/B%2B_tree
 
 一棵m阶的B+树和m阶的B树的异同点在于：
 
-	1.有n棵子树的结点中含有n-1 个关键字；（与B树n棵子树有n-1个关键字保持一致）
+    1.有n棵子树的结点中含有n-1 个关键字；（与B树n棵子树有n-1个关键字保持一致）
 
-	2.所有的叶子结点中包含了全部关键字，及指向含有这些关键字记录的指针，且叶子结点本身依关键字的大小自小而大的顺序链接。（而B 树的叶子节点并没有包括全部关键字，因为内结点就包含了一部分关键字）
+    2.所有的叶子结点中包含了全部关键字，及指向含有这些关键字记录的指针，且叶子结点依关键字顺序链接。（而B 树的叶子节点并没有包括全部关键字，因为内结点就包含了一部分关键字）
 
-	3.所有的非终端结点可以看成是索引部分，结点中仅含有其子树根结点中最大（或最小）关键字。（而B树的非终节点也包含需要查找的有效信息）
+    3.所有的非终端结点可以看成是索引部分，结点中仅含有其子树根结点中最大（或最小）的关键字。（而B树的非终节点也包含需要查找的有效信息）
 
 
 B+树中任何关键字的查询次数都一样（why?）
@@ -144,44 +139,44 @@ B*树：B*树是B+树的变体，在B+树的基础上，B*树中非根和非叶�
 红黑树：平衡的二叉搜索树
 
 性质：
-	1. 每个结点要么是红的，要么是黑的。
-	2. 根结点是黑的。
-	3. 每个叶结点（叶结点即指树尾端NIL指针或NULL结点）是黑的。
-	4. 如果一个结点是红的，那么它的两个儿子都是黑的。
-	5. 对于任一结点而言，其到叶结点树尾端NIL指针的每一条路径都包含相同数目的黑结点。
+    1. 每个结点要么是红的，要么是黑的。
+    2. 根结点是黑的。
+    3. 每个叶结点（叶结点即指树尾端NIL指针或NULL结点）是黑的。
+    4. 如果一个结点是红的，那么它的两个儿子都是黑的。
+    5. 对于任一结点而言，其到叶结点树尾端NIL指针的每一条路径都包含相同数目的黑结点。
 
 wikipedia: http://en.wikipedia.org/wiki/Red%E2%80%93black_tree
-	
+    
 
 红黑树的高度：
-	先证明一棵以x为根的子树中至少包含2^bh(x) - 1个内结点（除NIL结点之外的结点）（归纳法）。因为红黑树的根结点黑高度（不包括结点x）bh(x)至少为h/2，因此n>=2^(h/2) - 1
+    先证明一棵以x为根的子树中至少包含2^bh(x) - 1个内结点（除NIL结点之外的结点）（归纳法）。因为红黑树的根结点黑高度（不包括结点x）bh(x)至少为h/2，因此n>=2^(h/2) - 1
 
 
               x       left-rotate(T, x)         y
              / \       ------------->          / \
-	    a   y                             x   c
+        a   y                             x   c
                / \     <-------------        / \
               b   c   right-rotate(T, y)     a   b
 
 
 left-rotate(T, x)  
-	y <- right[x]
+    y <- right[x]
 
-	right[x] <- left[y] // y的左孩子成为x的右孩子
+    right[x] <- left[y] // y的左孩子成为x的右孩子
 
-	if left[y] != nil[T] // y的左孩子不为空
-	then p[left[y]] <- x
+    if left[y] != nil[T] // y的左孩子不为空
+    then p[left[y]] <- x
 
-	p[y] <- p[x]
+    p[y] <- p[x]
 
-	if p[x] = nil[T] // x为根结点
-		then root[T] <- y 
-	else if x = left[p[x]] //改变x的父亲结点的指针
-		then left[p[x]] <- y
-	else right[p[x]] <= y  
+    if p[x] = nil[T] // x为根结点
+        then root[T] <- y 
+    else if x = left[p[x]] //改变x的父亲结点的指针
+        then left[p[x]] <- y
+    else right[p[x]] <= y  
 
-	left[y] <- x
-	p[x] <- y  
+    left[y] <- x
+    p[x] <- y  
 
 
 红黑树的查找与二叉搜索树一致；
@@ -191,133 +186,133 @@ left-rotate(T, x)
 
 // 非递归插入元素z
 RB-INSERT(T, z)  
-	y <- nil[T]	//维护两个结点
-	x <- root[T]  
-	while x != nil[T]  
-		do y <- x  
-			if key[z] < key[x]  
-			then x <- left[x]  
-			else x <- right[x]  
+    y <- nil[T] //维护两个结点
+    x <- root[T]  
+    while x != nil[T]  
+        do y <- x  
+            if key[z] < key[x]  
+            then x <- left[x]  
+            else x <- right[x]  
 
-	// 当x为nil[T]时，y为z的父结点
-	p[z] <- y  
-	if y = nil[T]  //此时z为第一个插入的结点
-		then root[T] <- z  
-	else if key[z] < key[y]  
-		then left[y] <- z  
-		else right[y] <- z  
+    // 当x为nil[T]时，y为z的父结点
+    p[z] <- y  
+    if y = nil[T]  //此时z为第一个插入的结点
+        then root[T] <- z  
+    else if key[z] < key[y]  
+        then left[y] <- z  
+        else right[y] <- z  
 
-	left[z] <- nil[T]  
-	right[z] <- nil[T]  
-	color[z] <- RED  
+    left[z] <- nil[T]  
+    right[z] <- nil[T]  
+    color[z] <- RED  
 
-	RB-INSERT-FIXUP(T, z)  
+    RB-INSERT-FIXUP(T, z)  
 
 RB-INSERT-FIXUP函数处理插入结点（红结点）违反红黑树性质的三种情况（准确来说是6种情况）：
-	
+    
 RB-INSERT-FIXUP(T, z)
-	while color[p[z]] = RED		//当插入结点是一个红色结点的孩子时，修正红黑树的性质
-	// while循环保持的循环不变式：
-		1. 结点z是红色的
-		2. 如果p[z]是根，则p[z]是黑色的
-		3. 如果红黑性质被破坏，则至多只有一个被破坏，不是性质2就是性质4
+    while color[p[z]] = RED     //当插入结点是一个红色结点的孩子时，修正红黑树的性质
+    // while循环保持的循环不变式：
+        1. 结点z是红色的
+        2. 如果p[z]是根，则p[z]是黑色的
+        3. 如果红黑性质被破坏，则至多只有一个被破坏，不是性质2就是性质4
 
-	  do if p[z] = left[ p[p[z]] ]  
-	    then y <- right[ p[p[z] ] ] // 判断叔叔结点的颜色
+      do if p[z] = left[ p[p[z]] ]  
+        then y <- right[ p[p[z] ] ] // 判断叔叔结点的颜色
 
-	       if color[y] = RED	// 叔叔结点为红色，第一种情况，z指针上移两层
-			then color[ p[z] ] <- BLACK
-			color[y] <- BLACK
-			color[ p[p[z]]  ] <- RED
-			z <- p[ p[z] ]
+           if color[y] = RED    // 叔叔结点为红色，第一种情况，z指针上移两层
+            then color[ p[z] ] <- BLACK
+            color[y] <- BLACK
+            color[ p[p[z]]  ] <- RED
+            z <- p[ p[z] ]
 
-		else 
-			//最多两次旋转。
-			if z = right[ p[z] ] // 叔叔结点为黑色，z为父亲结点的右孩子，第二种情况
-			  then z <- p[z]
-			    left-rotate( T, z)	//左旋后情况2转变为情况3
+        else 
+            //最多两次旋转。
+            if z = right[ p[z] ] // 叔叔结点为黑色，z为父亲结点的右孩子，第二种情况
+              then z <- p[z]
+                left-rotate( T, z)  //左旋后情况2转变为情况3
 
-			color[p[z]] <- BLACK 	//情况3，进行右旋操作
-			color[p[p[z]]] <- RED
-			right-rotate( T, p[ p[z] ] )
+            color[p[z]] <- BLACK    //情况3，进行右旋操作
+            color[p[p[z]]] <- RED
+            right-rotate( T, p[ p[z] ] )
 
 
-	 else (same as then clause with "right" and "left" exchanged)
-	
-	color[ root[T] ] <- BLACK //到达这里时，有可能性质2被破坏（循环不变式）
+     else (same as then clause with "right" and "left" exchanged)
+    
+    color[ root[T] ] <- BLACK //到达这里时，有可能性质2被破坏（循环不变式）
 
 
 红黑树的删除：若删除的是黑色结点，则对树进行修正
 RB-DELETE( T, z )
-	// y 为要删除的结点
-	if left[z] = nil[T] or right[z] = nil[T]
-		then y <- z	//如果至少有一个孩子为空，删除该结点，把子树接到父结点上
-	else y <- TREE-SUCCESSOR(z) //删除y的后继结点
+    // y 为要删除的结点
+    if left[z] = nil[T] or right[z] = nil[T]
+        then y <- z //如果至少有一个孩子为空，删除该结点，把子树接到父结点上
+    else y <- TREE-SUCCESSOR(z) //删除y的后继结点
 
-	//x为左y的左子树或右子树，y不可能同时有两个孩子
-	if left[y] != nil[T]
-		then x <- left[y]
-	else x <- right[y]
-	
-	p[x] <- p[y]
+    //x为左y的左子树或右子树，y不可能同时有两个孩子
+    if left[y] != nil[T]
+        then x <- left[y]
+    else x <- right[y]
+    
+    p[x] <- p[y]
 
-	if p[y] = nil[T]
-		then root[T] <- x
-	else if y = left[p[y]]
-		then left[p[y]] <- x
-	else
-		right[p[y]] <- x
+    if p[y] = nil[T]
+        then root[T] <- x
+    else if y = left[p[y]]
+        then left[p[y]] <- x
+    else
+        right[p[y]] <- x
 
-	if y!=z
-		then key[z] <- key[y]
-			copy y's satellite data into z
-	
-	if color[y] = BLACK
-		then RB-DELETE-FIXUP(T, x) //x此时具有双重颜色
-		// 可能出现的破坏情况：
-			1. 删除y后x为红色的根
-			2. x与p[y]都是红色
-			3. 先前包含y的任何路径上黑结点个数少1
-	return y
+    if y!=z
+        then key[z] <- key[y]
+            copy y's satellite data into z
+    
+    if color[y] = BLACK
+        then RB-DELETE-FIXUP(T, x) //x此时具有双重颜色
+        // 可能出现的破坏情况：
+            1. 删除y后x为红色的根
+            2. x与p[y]都是红色
+            3. 先前包含y的任何路径上黑结点个数少1
+    return y
 
 
 
 RB-DELETE-FIXUP(T, x)
-	while x != root[T] and color[x] = BLACK 
-		// 各种情况的变换都可以保持性质5，while循环将额外的黑色沿树上移，直至：
-			1. x指向的结点为红黑色
-			2. x指向根结点
-			3. 做必要的旋转和颜色修改
+    while x != root[T] and color[x] = BLACK 
+        // 各种情况的变换都可以保持性质5，while循环将额外的黑色沿树上移，直至：
+            1. x指向的结点为红黑色
+            2. x指向根结点
+            3. 做必要的旋转和颜色修改
 
-		do if x = left[ p[x] ] //x是双重黑色的，w肯定不为空
-			then w <- right[p[x] ] // w为x的右兄弟
-			//情况1,3,4至多3次旋转。。
-				if color[w] <- RED // 此时p[x]为黑，情况1
-					// 交换w与p[x]的颜色，左旋
-					then color[w] <- BLACK
-					     color[p[x]] <- RED
-					     left-rotate(T, p[x]) // 以p[x]为根左旋
-					     w <- right[ p[x] ]   //变为情况2
+        do if x = left[ p[x] ] //x是双重黑色的，w肯定不为空
+            then w <- right[p[x] ] // w为x的右兄弟
+            //情况1,3,4至多3次旋转。。
+                if color[w] <- RED // 此时p[x]为黑，情况1
+                    // 交换w与p[x]的颜色，左旋
+                    then color[w] <- BLACK
+                         color[p[x]] <- RED
+                         left-rotate(T, p[x]) // 以p[x]为根左旋
+                         w <- right[ p[x] ]   //变为情况2
 
-				// 此时w一定为黑色的，若两个孩子都是黑色，情况2
-				if color[ left[w] ] = BLACK and color[right[w]] = BLACK
-					then color[w] <- RED
-					     x <- p[x]    //此时p[x]为新的x，具有双重颜色
-				else 
-					if color[right[w]] = BLACK //情况3，w左孩子为红色，右孩子黑色
-					then color[left[w]] <- BLACK
-					     color[w] <- RED	//新的w与左孩子的颜色，右旋
-					     right-rotate(T, w)
-					     w <- right[ p[x] ] //修改w的值，变为情况4
-					
-					//情况4，w为黑色，w的右孩子为红色
-					color[w] <- color[p[x]] // w为p[x]的颜色
-					color[ p[x] ] <- BLACK	// p[x], right[w]为黑色
-					color[right[w]] <- BLACK 
-					left-rotate(T, p[x] )	//右旋转 
-					x <- root[T]		//设置x为根结点
+                // 此时w一定为黑色的，若两个孩子都是黑色，情况2
+                if color[ left[w] ] = BLACK and color[right[w]] = BLACK
+                    then color[w] <- RED
+                         x <- p[x]    //此时p[x]为新的x，具有双重颜色
+                else 
+                    if color[right[w]] = BLACK //情况3，w左孩子为红色，右孩子黑色
+                    then color[left[w]] <- BLACK
+                         color[w] <- RED    //新的w与左孩子的颜色，右旋
+                         right-rotate(T, w)
+                         w <- right[ p[x] ] //修改w的值，变为情况4
+                    
+                    //情况4，w为黑色，w的右孩子为红色
+                    color[w] <- color[p[x]] // w为p[x]的颜色
+                    color[ p[x] ] <- BLACK  // p[x], right[w]为黑色
+                    color[right[w]] <- BLACK 
+                    left-rotate(T, p[x] )   //右旋转 
+                    x <- root[T]        //设置x为根结点
 
-		 else (same as then clause with "right" and "left" exchanged)
-				
-	color[x] <- BLACK // x指向一个红黑结点，x指向根	
+         else (same as then clause with "right" and "left" exchanged)
+                
+    color[x] <- BLACK // x指向一个红黑结点，x指向根 
 
