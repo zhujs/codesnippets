@@ -1,0 +1,28 @@
+JDK中提供了三种默认的class loaders：
+    Boostrap class loader
+    Extensions class loader
+    System class loader
+
+Boostrap class loader负责加载 $JAVA_HOME/jre/lib/ 目录下JAR包中的类
+
+Extensions class loader负责加载 $JAVA_HOME/jre/lib/ext/ 目录下JAR包中的类，以及由java.ext.dirs系统属性指定的目录下所能找到的JAR包中的类（JDK1.6之后该属性可以指定多个目录，第一个目录一定是$JAVA_HOME/jre/lib/ext/，其余目录将会被多个不同版本的JRE共享。在Linux下为/usr/java/packages/lib/ext）
+
+System class loader负责加载由java.class.path指定的目录下找到的JAR包中的类（默认为当前目录，可以通过CLASSPATH环境变量，命令行选项-cp或-classpath更改）
+
+
+Installed Extensions
+如果JAR包放在$JAVA_HOME/jre/lib/ext/目录下，使用 java javaClass 启动程序时，能找到相应的JAR包，JAR包中的类由Extensions class loader加载
+
+
+Download Extensions
+在JAR包的MANIFEST.MF文件中可以指定：
+    Class-Path header: 下载JAR包时将下载该header指定的JAR包或资源，程序每次执行时将重新下载
+
+    Extension-List header: 下载JAR包时将下载该header指定的JAR包，并安装在$JAVA_HOME/jre/lib/ext/目录下，程序下次执行时不会再下载（前提是版本一样）
+
+
+Java类加载机制，http://docs.oracle.com/javase/tutorial/ext/basics/load.html
+        The basic idea is that every class loader has a "parent" class loader. When loading a class, a class loader first "delegates" the search for the class to its parent class loader before attempting to find the class itself.
+
+
+
