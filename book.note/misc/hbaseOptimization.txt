@@ -1,0 +1,130 @@
+网上资料整理而成，有些资料无法找到原出处，望见谅
+
+reference: 
+    http://www.ibm.com/developerworks/cn/java/j-lo-HBase/index.html#icomments
+    http://www.cnblogs.com/niurougan/p/3976519.html
+
+应用层次优化：
+    1. 表设计
+        Pre-creating Regions：防止创建表时产生region热点
+        Row key：利用row key按字典序存储的特点设计row key（把时间戳加入
+                到row key中，使用Long.MAX_VALUE-timestamp作为row key，可以
+                快速定位数据）
+        Column family：Column family不要超过2~3个？？
+        In memory：HColumnDescriptor.setInMemory(true)，使得该column
+                family的数据到RegionServer的缓存中
+        Max Version：HColumnDescriptor.setMaxVersions(maxVersions)，
+                保存数据的maxVersions版本
+        Time to live：HColumnDescriptor.setTimeToLive(timeToLive)，
+                表中数据的存储生命期，过期数据将自动被删除
+        Compact & split（StoreFile的split？）：
+
+    2. 写表操作
+        Auto Flush：HTable.setAutoFlush(false)，合并多个Put请求，再执行RPC
+                请求
+        Write Buffer：HTable.setWriteBufferSize(writeBufferSize)，设置write
+                buffer大小
+        WAL Flag：Put/Delete操作时是否执行WAL
+        批量写：HTable.put(List<Put>)
+        多线程并发写：在客户端开启多个HTable写线程，每个写线程负责一个
+                HTable对象的flush操作
+
+    3.读表操作：
+        Scanner Caching：HTable.setScannerCaching(scannerCaching)，设置
+                scan.next()方法从服务端抓取的数据
+        Scan Attribute Selection：指定scan时的Column Family
+        Close ResultScanner：释放RegionServer端的资源
+        批量读：HTable.get(List)
+        多线程并发读：每个线程负责一部分row key的读取
+
+
+    4.缓存
+        Memcache：用以缓存查询结果
+        Blockcache：RegionServer上的HFileBlock内存缓存
+
+
+
+配置优化
+    1. RegionServer的磁盘、内存分配、数据备份数
+
+    2. 启用LZO压缩：HBase默认GZip（压缩比高，性能低）
+    
+    3. zookeeper.session.timeout (180000ms)
+        RegionServer与Zookeeper间的连接超时时间。当超时时间到后，
+        ReigonServer会 被Zookeeper从RS集群清单中移除，HMaster收到
+        移除通知后，会对这台server负责的regions重新balance，让其他
+        存活的RegionServer接管.
+
+        调优：
+        对于一些Online应用，RegionServer的宕机到恢复时间本身就很短的
+        （网络闪断，crash等故障，运维可快速介入），如果调低timeout时间，
+        会得不偿失。因为当ReigonServer被正式从RS集群中移除时，
+        HMaster就开始做balance了，当故障的RS快速恢复后，这个balance动作
+        是毫无意义的，反而会使负载不均匀，给RS带来更多负担。
+
+    4. hbase.regionserver.handler.count (10)
+        This setting defines the number of threads that are kept open to
+        answer incoming requests to user tables
+
+    5. hbase.hregion.max.filesize (256M)
+        ReigonServer上单个Reigon的大小
+
+        调优：
+        较小的region时，split或compact速度很快，但是执行较为频繁，
+        响应时间波动很大
+        较大region，则不太适合经常split和compaction，因为做一次compact
+        和split会产生较长时间的停顿，对应用的读写性能冲击非常大。
+        此外，大region意味着较大的storefile，compaction时对内存
+        也是一个挑战。
+
+        当然，大region还是有其用武之地，你只要在某个访问量低峰的时间点
+        统一做compact和split，大region就可以发挥优势了，毕竟它能保证
+        绝大多数时间平稳的读写性能。
+
+        内存方面，小region在设置memstore的大小值上比较灵活，大region则
+        过大过小都不行，过大会导致flush时app的IO wait增高，过小则因
+        store file过多读性能降低。
+
+    6. hbase.regionserver.global.memstore.upperLimit/lowerLimit (0.4/0.35)
+        upperlimit说明：hbase.hregion.memstore.flush.size 这个参数的作用
+        是当单个memstore达到指定值时，flush该memstore。但是，一台
+        ReigonServer可能有成百上千个memstore，每个 memstore也许未达到
+        flush.size，jvm的heap就不够用了。该参数就是为了限制memstores
+        占用的总内存。
+
+        当ReigonServer内所有的memstore所占用的内存综合达到heap的40%时，
+        HBase会强制block所有的更新请求并flush这些memstore以释放所有
+        memstore占用的内存。
+
+        lowerLimit说明： 同upperLimit，只不过当全局memstore的内存达到35%时，
+        它不会flush所有的memstore，它会找一些内存占用较大的 memstore进行
+        flush，当然更新还是会被block。lowerLimit算是一个在全局flush前的
+        补救措施。可以想象一下，如果 memstore需要在一段时间内全部flush，
+        且这段时间内无法接受写请求，对HBase集群的性能影响是很大的。
+
+        调优：
+        这是一个Heap内存保护参数，默认值已经能适用大多数场景。它的调整
+        一般是为了配合某些专属优化，比如读密集型应用，将读缓存开大，
+        降低该值，腾出更多内存给其他模块使用。
+
+    7. hfile.block.cache.size (0.2)
+        说明：storefile的读缓存占用Heap的大小百分比，该值直接影响数据
+        读的性能。
+
+        调优：
+        理论上该值越大越好，如果读比写少，开到0.4-0.5也没问题。如果
+        读写较均衡，0.3左右。如果写比读多，建议使用默认值。
+        设置这个值的时候，同时要参考
+        hbase.regionserver.global.memstore.upperLimit ，该值是
+        memstore占heap的最大百分比，两个参数一个影响读，一个影响写。
+        如果两值加起来超过80-90%，会有OOM的风险。
+
+    8. hbase.hstore.blockingStoreFiles (7)
+        在compaction时，如果一个Store (Coulmn Family)内有超过7个
+        storefile需要合并，则block所有的写请求，进行flush，限制
+        storefile数量增长过快。
+
+    9. hbase.hregion.memstore.block.multiplier (2)
+        当一个region里的某个 memstore超过单个
+        hbase.hregion.memstore.flush.size 2倍的大小时，block该region的
+        所有请求，进行flush，释放内存。
