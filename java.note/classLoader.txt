@@ -1,7 +1,7 @@
 JDK中提供了三种默认的class loaders：
     Boostrap class loader
-    Extensions class loader
-    System class loader
+    Extensions class loader (sun.misc.Launcher$ExtClassLoader)
+    System class loader (sun.misc.Launcher$AppClassLoader)
 
 Boostrap class loader负责加载 $JAVA_HOME/jre/lib/ 目录下JAR包中的类
 

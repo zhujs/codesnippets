@@ -1,0 +1,84 @@
+
+reference:
+    http://blog.csdn.net/zhangzhebjut/article/details/39474621 
+
+
+应用程序优化：
+    1、设置Combiner：Combiner可减少Map Task中间输出的结果，从而减少各个Reduce Task的远程拷贝数据量，最终表现为Map Task和Reduce Task执行时间缩短。
+
+    2、选择合理的Writable类型：在MapReduce模型中，Map Task和Reduce Task的输入和输出类型均为Writable。Hadoop本身已经提供了很多Writable实现，包括IntWritable、FloatWritable。为应用程序处理的数据选择合适的Writable类型可大大提升性能。比如处理整数类型数据时，直接采用IntWritable比先以Text类型读入在转换为整数类型要高效。如果输出整数的大部分可用一个或两个字节保存，那么直接采用VIntWritable或者VLongWritable，它们采用了变长整型的编码方式，可以大大减少输出数据量。
+
+
+
+
+
+Job参数调优
+    1、规划合理的任务数目：在Hadoop中，每个Map Task处理一个Input Split。Input Split的划分方式是由用户自定义的InputFormat决定的，默认情况下，有以下三个参数决定。
+       mapred.min.split.size：Input Split的最小值（默认值1）
+       mapred.max.split.szie：Input Split的最大值
+       dfs.block.size：HDFS 中一个block大小（默认值64MB）
+
+       golsize为用户期望的Input Split大小。golsize = totalSize/numSplits，其中totalSize为文件的总大小，numSplits为用户设定（Configuration中设定）的Map Task个数，默认情况下是1。因此，Input Split大小为splitSize = max{minSize, min{goalSize,blockSize}}。如果想让Input Split size大于block size，直接增大配置参数mpared.min.split.size即可。
+
+    2、增加输入文件的副本数
+
+    3、启动推测执行机制：当一个作业的某些任务运行速度明显慢于同作业的其他任务时，Hadoop会在另一个节点上为“慢任务”启动一个备份任务。这样两个任务同时处理一份数据，Hadoop最终会将优先完成的那个任务的结果作为最终结果，并将另一个任务杀掉。
+
+    4.设置失败容忍度：MapReduce中可以设置任务级别和作业级别的失败容忍度。作业级别的失败容忍度是指允许每个作业有一定比例的任务运行失败，这部分任务对应的输入数据将被忽略；任务级别的失败容忍度是指允许任务失败后再在另外节点上尝试运行，如果一个任务经过若干次尝试运行后仍然运行失败，那么才会最终认为该任务运行失败。用户应该根据应用程序的特点设置合理的失败容忍度，以尽快让作业运行完成和避免没必要的资源浪费。
+
+    5.适当打开JVM重用功能：为了实现任务隔离，Hadoop将每个任务放到一个单独的JVM中执行，而对于执行时间较短的任务，JVM启动和关闭的时间将占用很大比例时间，为此，用户可以启用JVM重用功能，这样一个JVM可连续启动多个同类型的任务。
+
+    6.设置任务超时时间：如果一个任务在一定的时间内未汇报进度，则TaskTracker会主动将其杀死，从而在另一个节点上重新启动执行。用户可根据实际需要配置任务超时时间。
+
+    7.合理使用DistributedCache
+
+    8.跳过坏记录：若开启该功能，当一条数据记录导致任务运行失败时（如一行数据过长导致OutOfMemoryError），该条记录将被报告给TaskTracker or ApplicationManager）。再次运行任务时，可自动识别并跳过这些坏记录。
+
+    9.提高作业优先级：作业调度器进行任务调度时均会考虑作业优先级这一因素
+
+    10.合理控制Reduce Task的启动时机
+         如果Reduce Task启动过早，则可能由于Reduce Task长时间占用Reduce slot资源造成“slot Hoarding”现象，从而降低资源利用率；反之，如果Reduce Task启动过晚，则会导致Reduce Task获取资源延迟，增加了作业的运行时间。
+
+
+
+
+
+任务级别参数调优
+     hadoop任务级别参数调优分两个方面: Map Task和Reduce Task。
+
+    1、Map Task调优
+        io.sort.mb：排序map输出时的内存缓冲区大小（单位为M）
+        io.sort.spill.percent：排序map输出时所用的内存缓冲区到达该比例时，将内存数据写到一个spilled file
+        io.sort.factor：一次合并中最多使用的文件数
+        min.num.spills.for.combine：运行combiner所需的最少spilled files
+        mapred.compress.map.output：是否压缩map输出
+        mapred.map.output.compression.codec：用于map输出的codec
+
+    2、Reduce Task调优
+        mapred.reduce.parallel.copies：把map输出复制到reducer的线程数
+        mapred.reduce.copy.backoff：reduce获取一个map输出所花的最大时间
+        io.sort.factor：一次合并中最多使用的文件数
+        mapred.job.shuffle.input.buffer.percent：shuffle的复制阶段，用于接收map输出的内存缓冲区占heap的百分比
+        mapred.iob.shuffle.merge.percent：map输出时所用的内存缓冲区到达该比例时，将内存数据写到一个spilled file
+        mapred.inmem.merge.threshold：用于接收map输出的内存缓冲区中文件数量超过该值时，产生一个spilled file
+        mapred.iob.reduce.input.buffer.percent：如果设置了该值，可将部分reducer的输入保存在内存中
+
+    Map Task和Reduce Task调优的一个原则就是减少数据的传输量、尽量使用内存、减少磁盘IO的次数、增大任务并行数，除此之外还有根据自己集群及网络的实际情况来调优。
+
+
+
+
+
+管理员角度调优
+    1、硬件选择：JobTracker or ResourceManager的配置应远远好于各个slave (TaskTracker or NodeManager)。
+
+    2、操作系统参数调优：增大同时打开的文件描述符和网络连接上限（Linux下net.core.somaxconn参数表示socket监听的backlog上限。
+
+    3、关闭swap分区：避免使用swap分区，提供程序的执行效率。除此之外，设置合理的预读取缓冲区的大小、文件系统选择与配置及I/O调度器选择等
+
+    4、JVM参数调优
+
+    5、调整Hadoop心跳配置：根据集群规模适度调整心跳间隔。为了减少任务分配延迟，Hadoop引入了带外心跳。带外心跳不同于常规心跳，它是任务运行结束或者任务运行失败时触发的，能够在出现空闲资源时能够迅速为空闲资源分配新的任务。
+
+    6、磁盘块配置、设置合理的RPC Handler和HTTP线程数目、慎用黑名单机制、启用批量任务调度、选择合适的压缩算法、启用预读取机制等（A当一个集群的规模较小时，如果一定数量的节点被频繁的加入系统黑名单中，则会大大降低集群的吞吐率和计算能力）。
+
