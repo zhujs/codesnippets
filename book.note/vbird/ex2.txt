@@ -1,10 +1,10 @@
-磁盘分区完毕后需要进行格式化，以成为操作系统可以利用的文件系统；
+磁盘分区完毕后需要进行格式化，才能成为操作系统可以利用的文件系统；
 
-Linux常用的文件系统为Ext2 (Linux second extended file system), Ext3, Ext4，通常来说，一个可被挂载的文件系统不一定是一个分区（LVM，RAID）。
+Linux常用的文件系统为Ext2 (Linux second extended file system), Ext3, Ext4，通常来说，一个可被挂载的文件系统不一定只对应一个分区（LVM，RAID）。
 
 Ext2文件系统的分析：
 
-Block Group使得更易于管理inode与datablock，文件系统在格式化时已规划好inode与block的数量，重新格式化或使用resize2fs等命令更改文件系统大小；
+BlockGroup使得更易于管理inode与datablock，文件系统在格式化时已规划好inode与block的数量。重新格式化或使用resize2fs等命令可以更改文件系统大小；
 
      +-------+----------+----------+------------------------+
      | Boot  |   Block  |   Block  |                        |
@@ -20,14 +20,14 @@ Block Group使得更易于管理inode与datablock，文件系统在格式化时�
 
 Superblock记录整个filesystem相关信息，使用dumpe2fe命令查看该信息；一般只有第一个Block Group有Superblock，其它的可以作为备份使用；
 
-filesystem description记录了block group 的开始与结束的block号码，以及说明superblock, blockmap, inodemap, data block分别位于哪一个block号码之间。
+filesystem description记录了block group 的开始与结束的block号码，以及说明superblock, blockmap, inodemap, data block分别位于哪一个block。
 
 
 一个文件拥有一个inode(128bytes)；
 系统读取文件先找到inode，分析权限，读取data blocks内容；
 inode使用直接，间接，双间接，三间接的方法索引data blocks（用额外的的data blocks来作索引）；
 若block size为b，一个inode number为4字节，则一个文件最大为（12个直接指针，1个间接、双间接的、三间接指针）：
-	min( ( (b/4)^3 + (b/4)^2 + b/4 + 12 ) * b,  (23^2-1) * 512  )
+	min( ( (b/4)^3 + (b/4)^2 + b/4 + 12 ) * b,  (2^32-1) * 512  )
 
 http://en.wikipedia.org/wiki/Ext2#File_system_limits
 
