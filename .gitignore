@@ -1,4 +1,6 @@
 *~
+*.i
+*.o
 *.class
 *.pyc
 *.out
