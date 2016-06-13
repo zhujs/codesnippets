@@ -9,7 +9,7 @@ jmp_buf buf;
 void sigabrt(int a)
 {
 	printf("SIGABRT was caught\n");
-	lognjmp( buf, 1 );
+	longjmp( buf, 1 );
 }
 
 
