@@ -109,13 +109,14 @@ chmod, fchmod: change the file access permissions for an existing file
 the chmod functions automatically clear two of the permission bits under the following conditions:
 	1. some system only allows the superuser to set the sticky bit of a regular file, otherwise, the bit is cleared (Solaris may cache the regular file, then setting this bit may affect the system performance)
 	2. set-group-ID is turned off if eGID != new file's group ID or eSID != new file's group ID (if the new file's group ID is inherited frome the parent directory ). This prevents from creating a set-group-ID file owned by a group that the user doesn't belong to
-	3. if a process does not have superuser privileges writes to a file, the set-user-ID and set-group-ID bits are automatically turned off.
+	3. if a process does not have superuser privileges writes to a file, set-group-ID bits are automatically turned off.
 
 
 4.10
 sticky bit: save-text bit (the text portion of a executable file stuck around in the swap area until the system was rebooted)
 
-sticky bit is set for a directory, a file in the directory can be removed or renamed only if the user has write permission for the directory and one of the following (the /tmp directory):
+sticky bit is set for a directory, a file in the directory can be removed or renamed only if the user has write permission for the directory and one of the
+following (the /tmp directory, users should not be able to delete or rename files owned by others):
 	own the file
 	own the directory
 	is the superuser

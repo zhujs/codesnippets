@@ -32,6 +32,6 @@ SATA设备：
 	3. 内核文件: 操作系统开始工作
 
 
-每个分区都拥有自己的启动扇区（boot sector, 里面也有boot loader）；
+每个分区都拥有自己的启动扇区（boot sector, 里面包含有boot loader）；
 实际可开机的内核文件是放置到各分区内的；
 boot loader读取内核文件或转交执行权给其它的boot loader；
