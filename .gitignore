@@ -1,6 +1,6 @@
 *~
-*.o
 *.i
+*.o
 *.class
 *.pyc
 *.out
