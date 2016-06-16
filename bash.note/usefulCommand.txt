@@ -35,3 +35,25 @@ cd && tar czv src | ssh user@host 'tar xz'
 
 # 递归下载某目录（选项见man page）
 wget -c -r -np -L -p  -nH http://www.xxx.com/yyy/
+
+
+# 捕获接口eth0的端口为chargen的包
+sudo tcpdump -i eth0 -nn port chargen
+
+
+# 删除文件最后10行
+sed -e :a -e '$d; N; 2,10ba' -e 'P;D' file
+# -e :a 
+#   ===> 设置lable，用于跳转（命令b或t），
+# -e '$d; N; 2,10ba'
+#   ===> 读到最后一行时，删除pattern space（最后一行已经由上一次 N 命令读入）
+#       读取下一行，追加其内容到pattern space（会跟新已读行数）
+#       读取第二行到第十行时，无条件跳转到lable a，继续执行sed命令
+#
+# -e 'P;D'
+#    ===> 打印pattern space中第一个换行符前的内容
+#       删除pattern space中第一个换行符前的内容，剩余内容将再进行一次所有sed命令操作
+
+
+# calculate crc32
+crc32 <(echo -e -n "\xC3\x1C\x1string")
