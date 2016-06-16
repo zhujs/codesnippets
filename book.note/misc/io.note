@@ -49,7 +49,7 @@ v                                       v                 |
 ^       select    ------------>   no datagram ready       ^
 |                                       |                 |
 blocks in                               |                 |
-call toselect                           |            wait for data
+call to select                          |            wait for data
 |                                       |                 |
 |                                       v                 |
 v                                 datagram ready          v

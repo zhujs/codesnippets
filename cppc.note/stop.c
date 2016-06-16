@@ -30,12 +30,12 @@ int main(void){
     pr_ids("parent");
 
     /* establish signal handler */
-    //signal(SIGHUP, sig_hup);
+    signal(SIGHUP, sig_hup);
     signal(SIGCONT, sig_cont);
     signal(SIGUSR1, sig_usr1);
 
     // 暂停的进程将在重新启动时才对信号进行响应（除了SIGKILL，SIGKILL信号就直接杀死进程）
-    // 貌似暂停的进程重新启动时，若已收到多个信号，系统会按照紧急程度排序。例如若没能捕捉SIGHUP信号，而进程收到了SIGHUP及SIGUSR1信号，这时进程总是会直接hangup。
+    // 貌似暂停的进程重新启动时，若已收到多个信号，系统会按照紧急程度排序。如果没有捕捉SIGHUP信号，而进程收到了SIGHUP及SIGUSR1信号，这时进程总是会直接hangup。
     /* stop ourself */
     kill(getpid(), SIGTSTP);
     exit(0);
