@@ -1,0 +1,15 @@
+规则一：不允许有多个强符号（函数及已初始化的全局变量）
+规则二：如果有一个强符号和多个弱符号（未初始化的全局变量），则选择强符号
+规则三：如果有多个弱符号，则任意选取其中一个
+
+// gcc中的 -fno-common 选项让链接器在遇到多重定义的全局符号时输出警告信息
+
+
+// 创建静态库（静态链接的文件size是比较大的）
+gcc -c addvec.c multvec.c
+ar rcs libvector.a addvec.o multvec.o
+
+gcc -O2 -c main.c
+gcc -static -o main main.o ./libvector.a
+
+在符号解析阶段，Unix链接器按命令行顺序从左到右扫描可重定为目标文件及存档文件，必须保证定义一个符号的库出现在引用这个符号的目标文件之前。

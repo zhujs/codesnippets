@@ -1,0 +1,17 @@
+// Precompile
+gcc -E main.c -o main.i
+gcc -E swap.c -o swap.i
+
+
+// Compilation stage
+gcc -S main.i -o main.s
+gcc -S swap.i -o swap.s
+
+
+// Assembly Stage
+gcc -c main.s -o main.o
+gcc -c swap.s -o swap.o
+
+
+// Linking Stage
+ld -o main main.o swap.o
