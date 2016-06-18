@@ -187,7 +187,7 @@ sigaction: examine or modify (or both) the action associated with a particular s
 		sigset_t sa_mask; /* additional signals to block in handler, the signal being delivered is automatically included in this mask, if signal-catching function returns, the signal mask is reset */
 
 		int sa_flags;
-		/* SA_INTERRUPT, SA_NOCLDSTOP, SARESETHAND, ... */
+		/* SA_INTERRUPT, SA_NOCLDSTOP, SA_RESETHAND, ... */
 
 		void (* sa_sigaction) (int, siginfo_t *, void *)
 		/* alternate handler (SA_SIGINFO), usually a union with sa_handler, only one of them will be used */
