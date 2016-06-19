@@ -1,0 +1,13 @@
+// creates a dynamic library
+gcc -shared -fPIC -o libvector.so addvec.c multvec.c
+
+gcc -o main main.c ./libvector.so 
+
+
+// 编译单元的强符号优先于动态库中的强符号
+gcc -o main main.c sharedVar.c ./libvector.so
+
+
+运行时加载动态库（Java Native Interface使用了该接口）
+    dlopen, dlsym, dlclose
+
