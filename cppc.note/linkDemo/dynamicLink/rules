@@ -1,0 +1,43 @@
+使用动态库创建可执行文件时，链接阶段只会静态执行一些链接（只拷贝一些重定位和符号表信息），然后在程序加载时动态完成链接过程（利用前面的链接信息）
+
+              main
+               |
+               |
+               v
+         +-------------+
+         |   loader    |
+         |  (execve)   |
+         +-------------+
+               |
+               | .interp (linker path)
+               |
+               v  link at load time
+         +----------------------+               libc.so
+         |   dynamic linker     |<---------- libvector.so
+         |  (ld-linux.so)       |
+         +----------------------+
+
+
+推测动态库会对 .text 及 .date 段作如下处理
+1. 以 SHARED 模式mmap .text 段，所有进程共享一份代码段
+2. 以 PRIVATE 模式mmap .data 段，当有进程试图修改 .data 段时，就会在自己的地址空间内生成一份数据拷贝
+
+
+Position-Independent Code
+
+PIC动态库数据引用
+
+数据段开始的地方有一个全局偏移量表（Global Offset Table, GOT），该模块引用的每个动态库全局数据对象在该表中都有一个条目，动态链接器在加载时会重定位GOT的条目，使得其包含正确的绝对地址（GOT有动态库变量的绝对地址）
+
+引用变量的代码（需使用更多的指令引用变量，且可能占用更多的寄存器）：
+
+        call L1
+L1:     popl %ebx               ebx contains the current PC
+        addl $VAROFF, %ebx      ebx points to the GOT entry for var
+        movl (%ebx), %eax       reference indirect through the GOT
+        movl (%eax), %eax
+
+
+
+PIC动态库函数调用
+    可以使用上述的机制实现加载时重定位GOT条目，but效率偏低。因此，可以使用GOT与PLT（Procedure Linkage Table）实现lazy binding

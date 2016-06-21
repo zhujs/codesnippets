@@ -1,0 +1,98 @@
+// objdump -r -d main.o
+// 重定位条目放在 .rela.text 或 .rela.data 中，
+
+// 修改 .text section 偏移量 0xa 处的PC相对引用
+// 
+// r.offset = 0xa
+// r.symbol = swap
+// r.type   = R_X86_64_PC32 
+//
+// ADD(.text)及ADD(swap)为可执行文件中的逻辑地址
+//
+//    refaddr = ADD(.text) + r.offset = ADD(.text) + 0xa
+//
+//    *refaddr = (unsigned) ((ADDR(swap) - 0x4) - refaddr)
+// 执行call指令时，PC是下一条指令的值，CPU 会执行以下两个步骤
+//      1. push PC onto stack
+//      2. PC <- PC + XXX （因此上述计算中要减去 0x4）
+//
+
+main.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <main>:
+0:   55                      push   %rbp
+1:   48 89 e5                mov    %rsp,%rbp
+4:   b8 00 00 00 00          mov    $0x0,%eax
+9:   e8 00 00 00 00          callq  e <main+0xe>
+                     a: R_X86_64_PC32        swap-0x4
+e:   b8 00 00 00 00          mov    $0x0,%eax
+13:   5d                      pop    %rbp
+14:   c3                      retq   
+
+
+
+
+
+// objdump -r -D swap.o
+// 修改 .data section 偏移量 0x00 处的绝对引用
+// r.offset = 0x00
+// r.symbol = buf
+// r.type   = R_X86_64_64 
+//
+// *refptr = (unsigned) (ADD(r.symbol) + 0x00)
+// 
+// 试一下在 swap.c 中修改为 int* bufp0 = &buf[1];
+
+...
+
+Disassembly of section .data:
+
+0000000000000000 <bufp0>:
+        ...
+                                0: R_X86_64_64  buf
+
+...
+
+
+
+
+
+// 可执行文件中通常拥有以下section，ELF头部中包括程序的entry point
+// .text ==> 机器代码
+// .init ==> 初始函数
+// .data ==> 已初始化的golbal variables及static local变量，static变量有可能会重>命名，保持唯一性
+// .bss  ==> 未初始化的golbal variables及staic local变量
+//
+// 以下section不会加载到内存中
+// .symtab ==> 符号表（用于符号解析）
+// .strtab ==> 常量字符串表
+// 以'-g'选项编译目标文件，会产生 .debug 及 .line段，用于调使
+//
+//
+// objdump -p main
+// Program Header 描述可执行文件与存储器段的映射关系
+
+...
+LOAD off    0x0000000000000000 vaddr 0x0000000000400000 paddr 0x000000000040 0000 align 2**21
+filesz 0x0000000000000714 memsz 0x0000000000000714 flags r-x
+
+
+LOAD off    0x0000000000000e10 vaddr 0x0000000000600e10 paddr 0x0000000000600e10 align 2**21
+filesz 0x0000000000000238 memsz 0x0000000000000248 flags rw-
+...
+
+
+
+// C程序的执行伪代码
+//
+// 0XXXXXXXX <_start>:
+//     call __libc_init_first
+//     call _init
+//     call atexit
+//     call main
+//     call _exit
+//
+

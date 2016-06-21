@@ -25,9 +25,10 @@ Size              EntSize          Flags  Link  Info  Align
 [11] .strtab           STRTAB           0000000000000000  00000530 0000000000000016  0000000000000000           0     0     1
 
 
+
 // readelf -s main.o
-// Ouput format: 
-//  num, section_offset, object_size, type, binding, X, section_idex (ABS, UNDEF, COM), name
+// Ouput format （符号表条目）
+//  num, section_offset, object_size, type, binding, X, section_idex (ABS, UNDEF, COM(.bss中的数据目标) ), name
 // 8: buf在.data段（Ndx=3）中，偏移量为0，大小为8，为全局变量
 
 Symbol table '.symtab' contains 11 entries:
