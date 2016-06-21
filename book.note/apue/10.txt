@@ -89,9 +89,12 @@ POSIX提供的可靠信号机制解决了这两个问题（标准化了BSD的接
 
 10.7
 System V中的“异类”信号SIGCLD：
+    1. SIGCLD被配置为SIG_IGN（SIG_DFL虽然也是忽略，但是会产生zombie），不会产生zombie（Posix没有说明SIGCHLD被忽略时的明确行为，sigaction的SA_NOCLDWAIT可以禁止产生zombie）；
+    2. 当SIGCLD被捕获，内核检查是否有zombie子进程，如果有则调用SIGCLD的信号处理函数；
+
     sig_cld(int signo)
     {
-        signal( SIGCLD, sig_cld); /* a indefinite loop */
+        signal( SIGCLD, sig_cld); /* 在System V中会导致栈溢出 */
         wait();
     }
     /* we need to reestablish the handler after the wait , */

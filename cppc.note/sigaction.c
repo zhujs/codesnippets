@@ -1,4 +1,6 @@
-#include "apue.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
 #include <errno.h>
 
 
@@ -10,8 +12,7 @@ void sigchld(int signo)
 int
 main(void)
 {
-	pid_t	pid;
-
+	pid_t pid;
 
 	// registers the SIGCHLD handler and specifies the SA_NOCLDWAIT
 	// and SA_RESTART option flags
@@ -38,6 +39,6 @@ main(void)
 	
 	// the wait function call restarts when the first child terminates
 	// blocks until the second child terminates
-	wait(NULL ); 
+	wait(NULL); 
 	perror("wait");
 }
