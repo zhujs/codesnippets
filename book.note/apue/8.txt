@@ -1,5 +1,5 @@
 
-UNIX进程控制主要体现在几个方面：产生新进程，执行新程序，终止进程。每个UNIX进程拥有三种不同的IDs——real, effective, and saved; user and group IDs（这是进程的属性）；       
+UNIX进程控制主要体现在几个方面：产生新进程，执行新程序，终止进程。每个UNIX进程拥有三种不同的IDs——real, effective, and saved; user and group IDs（这是进程的属性）； 
 
 
 Process Identifiers:
@@ -7,49 +7,52 @@ Process Identifiers:
 
 几个返回进程IDs的函数：
 
-	getpid(); getppid(); getuid(): real user ID; geteuid(): effective user ID; getgid(); getegid();
+    getpid(); getppid(); getuid(): real user ID; geteuid(): effective user ID; getgid(); getegid();
 
 fork and vfork Function:
 pid_t fork( void );
 
 return: 0 in child, process ID of child in parent, -1 on error
-Called once but returns twice; 在子进程返回0是因为可以用getppid()获得你进程的pid（进程号0被内核进程所占用），而你进程可能拥有多个子进程，没有函数可以获得所有子进程的进程IDs；子进程是父进程的一个复本，only share the text segment（通常使用copy-on-write技术，因为大多数子进程会调用exec, if either process tries to modify these regions, the kernel then makes a copy of that piece of memory only, typically a page in memory）；
+Called once but returns twice;
+在子进程返回0是因为可以用getppid()获得你进程的pid（进程号0被内核进程所占用），而你进程可能拥有多个子进程，没有函数可以获得所有子进程的进程IDs；子进程是父进程的一个复本，only share the .text segment（通常使用copy-on-write技术，因为大多数子进程会调用exec, if either process tries to modify these regions, the kernel then makes a copy of that piece of memory only, typically a page in memory）；
 Linux provides the clone (FreeBSD rfork) system call, which allows the caller to control what is shared between parent and child.
 
 注意write函数是不缓冲的，而标准I/O在连接到终端的情况下为行缓冲，连接到文件则为全缓冲，在调用fork函数之后，要注意标准I/O的缓冲区还有没有数据。
-	printf("before fork"); /* doesn't flush */
-	if( 0 == ( pid = fork() )  ) /* child inherits the buffer content of standard I/O */
-	{
-		/* do some stuff */
-		exit(0);   /* this will flush standard I/O */
-	}
+    printf("before fork"); /* doesn't flush */
+    if( 0 == ( pid = fork() )  ) /* child inherits the buffer content of standard I/O */
+    {
+        /* do some stuff */
+        exit(0);   /* this will flush standard I/O */
+    }
 
 子进程继承父进程所有打开的文件描述符，当共同使用一个fd时，需要使用同步语句（wait），也可以各自关闭不需要用到的fds。
 
 子进程不继承：
-	File locks set by parent
-	Pending alarms are cleared for the child
-	The set of pending signals for the child is set to the empty set
-	The child's tms_utime, tms_stime, tms_cutime, and tms_cstime values are set to 0 (process time)
+    File locks set by parent
+    Pending alarms are cleared for the child
+    The set of pending signals for the child is set to the empty set
+    The child's tms_utime, tms_stime, tms_cutime, and tms_cstime values are set to 0 (process time)
 
 Some operating systems combine the operations - a fork followed by an exec - into a single operation called a spawn. (Separating the two allows the child to change the per-process attributes between the fork and the exec, such as I/O redirection, user ID, signal disposition, and so on)
 
 vfork function is intended to create a new process when the purpose of the new process is to exec a new program. This function create a new process without copying the address space of the parent!! 
 
-	printf("before vfork\n");
-	pid = vfork();
-	...
-	if (pid == 0) /* child */
-	{
-		glob ++; /* modify parent's variables, won't copy anything */
-		var ++;
-		_exit(0); 
-		/* if the standard I/O implementation closes the I/O, parent printf cause error
-		   but many implementation leave that to the kernel (close all the FDs)!
-		*/
-	}
+    printf("before vfork\n");
+    pid = vfork();
+    ...
+    if (pid == 0) /* child */
+    {
+        glob ++; /* modify parent's variables, won't copy anything */
+        var ++;
+        _exit(0); 
+        /* exit(0): if the standard I/O implementation closes the I/O stream, parent printf
+           cause error but many implementation leave that to the kernel (close all the FDs)!
+        */
+    }
+    // parent continues
+    printf("glob = %d, var = %d\n", glob, var);
 
-The child is guaranteed to run first and runs in the address space of the parent, until the child calls exec or exit (so it may also lead to deadlock if the child depends on further actions of the parent beforecalling either of these two functions).
+The child is guaranteed to run first and runs in the address space of the parent, until the child calls exec or exit (so it may also lead to deadlock if the child depends on further actions of the parent before calling either of these two functions).
 
 注意：在vfork的子进程中如果调用exit可能会关闭标准I/O流（具体要依据exit的实现）
 
@@ -73,25 +76,25 @@ Executing a return from the start routine of the last thread in the process or c
 wait Functions:
 A process that calls wait or waitpid can:
 
-	Block, if all of its children are still running
-	Return immediately with the termination status of a child
-	Return immediately with an error, if it doesn't have any child process
+    Block, if all of its children are still running
+    Return immediately with the termination status of a child
+    Return immediately with an error, if it doesn't have any child process
 
 调用wait函数可以得到子进程的终止状态（int，可以用几个bits来表示退出状态，几个bits来表示信号数字，一个bit来表示有无core file产生等），调用四个互斥的macros来获得进程如何终止（定义在<sys/wait.h>中）：
 
-	WIFEXITED( status );  如为真，使用WEXITSTATUS(status) 获得8bits的退出状态；
-	WIFSIGNALED( status );  WTERMSIG( status )获得使进程终止的信号数, WCOREDUMP( status )是否产生core file（该宏不在SUS中定义）
-	WIFSTOPPED( status ); WSTOPSIG( status ); currently stopped? caused by which signal?
-	WIFCONTINUED( status ); True if has been continued
+    WIFEXITED( status );  如为真，使用WEXITSTATUS(status) 获得8bits的退出状态；
+    WIFSIGNALED( status );  WTERMSIG( status )获得使进程终止的信号数, WCOREDUMP( status )是否产生core file（该宏不在SUS中定义）
+    WIFSTOPPED( status ); WSTOPSIG( status ); currently stopped? caused by which signal?
+    WIFCONTINUED( status ); True if has been continued
                                                         ^
 waitpid 提供了与wait不能实现的功能：                    |
                                                         |
-	等待特定进程（可以等待进程组里的进程）          |
-	可以不阻塞                                      v
-	提供对作业控制的支持（WUNTRACED and WCONTINUED 选项，返回stoped or continued process state）
+    等待特定进程（可以等待进程组里的进程）          |
+    可以不阻塞                                      v
+    提供对作业控制的支持（WUNTRACED and WCONTINUED 选项，返回stoped or continued process state）
 
 waitid is similar to waitpid function (specify a children to wait using separated auguments):
-	int waitid( idtype_t idtype, id_t id, siginfo_t *infop, int option);
+    int waitid( idtype_t idtype, id_t id, siginfo_t *infop, int option);
 
 wait3, wait4 are similar to wait, waitpid but has an additional argument that allows the kernel to return a summary of the resources usage of child (user CPU time, system CPU time, number of page faults, number of signals received, and the like).
 
@@ -102,7 +105,7 @@ race condition occurs when multiple processes are trying to do something with sh
 exec Functions:
 With fork, we can create new processes; and with the exec functions, we can initiate new programs. exce merely replaces the current process: its text, data, heap, and stack segments with a brand new program form disk.
 
-                l: list         v: vector       p: path prefixes (using PATH) 	e: environment
+                l: list         v: vector       p: path prefixes (using PATH)   e: environment
 
                      +----------+       +-----------+        +------------+
                      | execlp   |       | execl     |        | execle     |
@@ -112,7 +115,7 @@ With fork, we can create new processes; and with the exec functions, we can init
                           |                   |                     |
                           v                   v                     v
                      +----------+ PATH  +-----------+         +------------+
-                     | execvp   | ----> | execl     | ------> | execle     |
+                     | execvp   | ----> | execv     | ------> | execve     |
                      +----------+       +-----------+ environ +------------+
                                                      
                                                       
@@ -128,14 +131,14 @@ POSIX.1 requires that open directory streams (opendir function) be closed across
 Changing User IDs and Group IDs:
 The control to the access to system's resources (endows or lowers the privileges);
 
-	setuid( ); setgid(  ); 
-	superuser change all IDs, unprivileged user can set its eID to either its rID or sID;
+    setuid( ); setgid(  ); 
+    superuser change all IDs, unprivileged user can set its eID to either its rID or sID;
 
-	setreuid( ); setregid( );
-	swapping of the rID and eID
+    setreuid( ); setregid( );
+    swapping of the rID and eID
 
-	seteuid(); setegid(): 
-	类似setuid函数，root用户调用时只影响eID；
+    seteuid(); setegid(): 
+    类似setuid函数，root用户调用时只影响eID；
 
 
 为防止某些安全问题，在调用exec前，最好把rID与eID设置为normal user ID:)；
@@ -152,27 +155,27 @@ awkexample optional-arguments   ==   awk -f awkexample optional-arguments
 in the interpreter file we specify #! /usr/bin/gawk -f
 
 Provide an efficiency gain for the user at some expense in the kernel, but useful for the following reasons
-	1. Thay hide that certain programs are scripts.(previous ex)
-	2. Provide an efficiency gain than wrapping it in a shell script.
-	3. Can use other shell to interprete the file
+    1. Thay hide that certain programs are scripts (previous ex).
+    2. Provide an efficiency gain than wrapping it in a shell script.
+    3. Can use other shell to interprete the file
 
-the system function should never be used from a set-user-ID or a set-group-ID program, because the program we run may ge the promoted privilege, but some shells will set the eID to be the read ID before excute the new program. One example is we call system("IFS=... commandBrokeSystem")!! (Most shell reset IFS before execution now, but just be careful)
+the system function should never be used from a set-user-ID or a set-group-ID program, because the program we run may ge the promoted privilege, but some shells will set the eID to be the real ID before excute the new program. One example is we call system("IFS=... commandBrokeSystem")!! (Most shell reset IFS before execution now, but just be careful)
 
-The system call must be:
-	if error occurs, return -1 and set errno
-	if exec fails, return 127 as the shell does
-	otherwise, return the child process's status
+The system call (execute a shell) must be:
+    if error occurs, return -1 and set errno
+    if exec fails, return 127 as the shell does
+    otherwise, return the child process's status
 
 we must has a waitpid (specify the new process to wait) function to implement a safe system function!!
 
 shell command exit status (man page):
-	0	success
-	1	general error
-	2	incorrect usage of builtin command
-	126	command is found but is not executable
-	127	command is not found
-	128+n	caught a signal n
-	255	exit -1
+    0   success
+    1   general error
+    2   incorrect usage of builtin command
+    126 command is found but is not executable
+    127 command is not found
+    128+n   caught a signal n
+    255 exit -1
 
 
 Process Accounting
@@ -186,13 +189,12 @@ Remember that it writes the record after the process terminates and the accounti
 
 
 User Identification and Process time
-	getpwuid( getuid() ):
-	not accurate if a user have multiple user name with the same user IDto have a different login shell
+    getpwuid( getuid() ): not accurate if a user have multiple user name with the same user IDto have a different login shell
 
-	getlogin(): fails if a processes deamon (no controlling terminal)
+    getlogin(): fails if in a processes deamon (no controlling terminal)
 
-	call ttyname and find a matching entry in utmp file (users currently logged in)
-	get the LOGNAME environment variable (but user may change that)
+    call ttyname and find a matching entry in utmp file (users currently logged in)
+    get the LOGNAME environment variable (but user may change that)
 
 
-	times(struct tms *buf): return number of clock ticks that have elapsed since an arbitrary point in the past, and stores CPU time and system CPU time in the buf (also can obtain for any terminated children), but we need to use its relative value.
+    times(struct tms *buf): return number of clock ticks that have elapsed since an arbitrary point in the past, and stores CPU time and system CPU time in the buf (also can obtain for any terminated children), but we need to use its relative value.

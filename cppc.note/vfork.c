@@ -16,11 +16,16 @@ int main(void)
 	}
 	else if ( 0 == pid ) 
 	{
+		/* share the same output if using vfork to create new child */
 		glob++;
 		var++;
 		printf("vfork\n"); 
-		/* share the same output if using vfork to create new child */
-		exit(0); 
+
+        /*execlp("echo", "echo", "hello, vfork", 0);*/
+
+        // Should never return in vfork child! 会破坏栈数据，父进程报错
+        /*return 0;*/ 
+		exit(0);
 	}
 
 	fflush(NULL);

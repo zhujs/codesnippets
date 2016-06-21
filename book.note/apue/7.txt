@@ -132,8 +132,7 @@ alloca function allocate memory on stack!
 setjmp and longjmp functions:
 These two functions perform nonlocal  goto to another function, branching back through the call frames to a function that is in the call path of the current function; It is common to be five or more levels down from where we want to return to and it becomes messy if we have to code each function with a special return value that tells it to return one level (useful for handling error conditions that occur in a deeply nested function call).
 
-	int setjmp( jmp_buf env );
-                 return: 0 if called directly, nonzero if returning from a call to longjmp
+	int setjmp( jmp_buf env ): return: 0 if called directly, nonzero if returning from a call to longjmp
 
 	void longjmp( jmp_buf env, int val );
 
@@ -153,4 +152,3 @@ successive process
 	int setrlimit( int resource, const struct rlimit *rlptr )
 
 The resource limits affect the calling process and are inherited by any of its children. So the command ulimit has to be built-in command, so as the umask and cd command.
-
