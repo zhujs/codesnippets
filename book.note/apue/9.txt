@@ -1,183 +1,179 @@
 Chapter 9: Process Relationships
 
-	Process groups and sessions. Relationship between login shell and all
-	the processes that we start from our login shell
+    Process groups and sessions. Relationship between login shell and all
+    the processes that we start from our login shell
 
 9.2 Terminal Logins
-	Logins comes through a terminal device driver
+    Logins comes through a terminal device driver
 
-	Character-based terminal
-	Graphical terminal, emulating a simple Character-based terminal
-	A graphical terminal running a windowing system
+    Character-based terminal
+    Graphical terminal, emulating a simple Character-based terminal
+    A graphical terminal running a windowing system
 
-	Traditional BSD login:
-		1. init reads /etc/ttys (Linux: /etc/inittab, has one line per term device, may specify parameters (baud rate),depend on implementation)
-		for every terminal.
+    Traditional BSD login:
+        1. init reads /etc/ttys (Linux: /etc/inittab, has one line per term device, may specify parameters (baud rate),depend on implementation) for every terminal.
 
-		2. init process does a fork followed by an exec of the getty program(empty
-		environment) for every terminal device, getty call open for the terminal device, prompts for a login name.
+        2. init process does a fork followed by an exec of the getty program(empty environment) for every terminal device, getty call open for the terminal device, prompts for a login name.
 
-		3. exec login(configured in gettytab file) programe, initial
-		env set:
-			execle("/bin/login", "login", "-p", username, (char*
-			0), envp );
-		verify the validity of user (or the Pluggable Authentication Modules): getpwnam(), getpass(), crypt(),
+        3. exec login(configured in gettytab file) programe, initial env set:
+            execle("/bin/login", "login", "-p", username, (char* 0), envp );
+        verify the validity of user (or the Pluggable Authentication Modules): getpwnam(), getpass(), crypt(),
 
-		4. If log in correctly, login perform many tasks(chdir,chown chmod(of the terminal), setuid...) and finally exec login shell:
-			execl("/bin/sh","-sh", (char *)0 ); Then the login shell reads its start-up files;
+        4. If log in correctly, login perform many tasks(chdir,chown chmod(of the terminal), setuid...) and finally exec login shell:
+            execl("/bin/sh","-sh", (char *)0 ); Then the login shell reads its start-up files;
 
-		Login shell's parent is init.
+        Login shell's parent is init.
 
-	Note: Mac OS X, graphical-based login; linux differ in the
-	configuration of the terminal; Solaris provides ttymon (Service Access facility) for other
-	terminal logins.
+    Note: Mac OS X, graphical-based login; linux differ in the
+    configuration of the terminal; Solaris provides ttymon (Service Access facility) for other
+    terminal logins.
 
 9.3 Network Logins
-	Login is simply a service available. Network logins come through the kernel's
-	network interface drivers.
+    Login is simply a service available. Network logins come through the kernel's
+    network interface drivers.
 
-	Pseudo terminal driver: emulate the behavior of a serial terminal and map
-	terminal operations to network operations, and vice versa.
-	inetd: waits for most network connections.
+    Pseudo terminal driver: emulate the behavior of a serial terminal and map
+    terminal operations to network operations, and vice versa.
+    inetd: waits for most network connections.
 
-	BSD Network Logins:
-		1. init invokes a shell an executes the script /etc/rc (start
-		inetd (Linux: xinetd).
+    BSD Network Logins:
+        1. init invokes a shell and executes the script /etc/rc (start
+        inetd (Linux: xinetd).
 
-		2. A TCP conn request arrives for the TELNET server, inetd
-		fork and exec the telnetd program. 
+        2. A TCP conn request arrives for the TELNET server, inetd
+        fork and exec the telnetd program. 
 
-		3. telnetd opens a pseudo-terminal device(connect parent and
-		chile) and splits into two
-		processes using fork. Parent handles the communication across
-		the network, child does an exec of the login program, if log in successfully, exec login shell.
+        3. telnetd opens a pseudo-terminal device(connect parent and
+        chile) and splits into two
+        processes using fork. Parent handles the communication across
+        the network, child does an exec of the login program, if log in successfully, exec login shell.
 
-	Login shell's parent is inetd and it's also the start of a POSIX.1 session, and that the terminal or pseudo terminal is the controlling terminal for the session.
+    Login shell's parent is inetd and it's also the start of a POSIX.1 session, and that the terminal or pseudo terminal is the controlling terminal for the session.
 
 9.4 Process Groups
-	A collection of one or more processes, usually associated with the
-	same job.
-		pid_t getpgrp(); 
-		pid_t getpgid(pid_t pid)(XSI): return group process ID for the process pid;
+    A collection of one or more processes, usually associated with the
+    same job.
+        pid_t getpgrp():
+        pid_t getpgid(pid_t pid)(XSI): return group process ID for the process pid;
 
-	Process group leader: identified by its process group ID being equal
-	to its process ID
+    Process group leader: identified by its process group ID being equal
+    to its process ID
 
-	Process group lifetime: the period of time that begins when the group
-	is created and ends when the last remaining process leaves the group
+    Process group lifetime: the period of time that begins when the group
+    is created and ends when the last remaining process leaves the group
 
-	setpgid(pid, pgid): joins an existing group or creates a new group.
-	(only for itself or any children process(can't do that after the child call
-	exec function ) ), in most job-control shells, this function is called after a fork both in the parent 
-	and the child to prevent race condition.
+    setpgid(pid, pgid): joins an existing group or creates a new group.
+    (only for itself or any children process(can't do that after the child call
+    exec function)), in most job-control shells, this function is called after a fork both in the parent 
+    and the child to prevent race condition.
 
 9.5 Sessions
 
-	A session is a collection of one or more process groups.
+    A session is a collection of one or more process groups.
 
-	setsid(): establish a new session if the calling process is not a
-	process group leader, otherwise, return error( fork and have the parent terminate).
-		1. the calling process becomes the session leader and has only
-		one process(itself).
+    setsid(): establish a new session if the calling process is not a
+    process group leader, otherwise, return error( fork and have the parent terminate).
+        1. the calling process becomes the session leader and has only
+        one process(itself).
 
-		2. the process becomes the process group leader of a new
-		process group.
+        2. the process becomes the process group leader of a new
+        process group.
 
-		3. has no controlling terminal
+        3. has no controlling terminal
 
-	getsid(): session leader's process group ID (session ID).
+    getsid(): session leader's process group ID (session ID).
 
 9.6 Controlling Terminal
-	A session can have a single controlling terminal
-	Session leader(also called controlling process) establishes the conn to the CT.
-	A single foreground process group, others are background pg.
-	SIGINT and SIGQUIT are sent to foreground pg.
-	If a modem disconnect, SIGHUP is sent to the controlling process.
+    A session can have a single controlling terminal
+    Session leader(also called controlling process) establishes the conn to the CT.
+    A single foreground process group, others are background pg.
+    SIGINT and SIGQUIT are sent to foreground pg.
+    If a modem disconnect, SIGHUP is sent to the controlling process.
 
-	The CT is established automatically when we log in:
-		open the first terminal device by the session leader without the O_NOCTTY flag (system V-based system)
-		calls ioctl with a request argument of TIOCSCTTY (BSD-base system)
+    The CT is established automatically when we log in:
+        open the first terminal device by the session leader without the O_NOCTTY flag (system V-based system)
+        calls ioctl with a request argument of TIOCSCTTY (BSD-base system)
 
-	If a program wants to talk to the CT(standard input or output is
-	redirected), open the file /dev/tty.
-	
-	(need password)decrypt the file and output to the print spooler
-		crypt < file1 | lpr;
+    If a program wants to talk to the CT(standard input or output is
+    redirected), open the file /dev/tty.
+    
+    (need password)decrypt the file and output to the print spooler
+        crypt < file1 | lpr;
 
 9.7 tcgetpgrp, tcsetpgrp, tcgetsid
-	tcgetpgrp( int filedes), tcsetpgrp( int filedes, pid_t pgrpid ):
-	tell the kernel which process group (in the same session) is the 
-	foreground process group (to send signals or input), normally called by job-control shells.
-	
-	tcgetsid(int filedes): obtain the process group ID for the session leader given a
-	file descriptor for the controlling TTY.
+    tcgetpgrp( int filedes), tcsetpgrp( int filedes, pid_t pgrpid ):
+    tell the kernel which process group (in the same session) is the 
+    foreground process group (to send signals or input), normally called by job-control shells.
+    
+    tcgetsid(int filedes): obtain the process group ID for the session leader given a
+    file descriptor for the controlling TTY.
 
 9.8 Job Control(BSD form)
-	allows us to start multiple jobs from a single terminal and to control
-	which job can access the terminal and which jobs are to run in the
-	background.
-		1. A shell that supports job control
-		2. The terminal driver(send signal to fg job and terminal input)
-		3. The kernel must support certain job-control signals
+    allows us to start multiple jobs from a single terminal and to control
+    which job can access the terminal and which jobs are to run in the
+    background.
+        1. A shell that supports job control
+        2. The terminal driver(send signal to fg job and terminal input)
+        3. The kernel must support certain job-control signals
 
-	A job is simply a collection of processes, bg job: make all &;
+    A job is simply a collection of processes, bg job: make all &;
 
-	The shell print the changed status of background jobs ([1]- Done ....)
-	before it prints its prompt in order to avoid the mixture of input line 
-	(the shell prints the changed status of background jobs right before it
-	prints its prompt).
+    The shell print the changed status of background jobs ([1]- Done ....)
+    before it prints its prompt in order to avoid the mixture of input line 
+    (the shell prints the changed status of background jobs right before it
+    prints its prompt).
 
-	cat > temp &;
-	Terminal driver send SIGTTIN (causes to stop) to it, shell detect this
-	and tells us that the job has been stopped. Type fg to place the job
-	into fg and send SIGCONT to the process group. Similarly for the output, 
-	but whether the output from a process in the background process group
-	appears on the terminal is an option (SIGTTOUT, stty tostop)
+    cat > temp &;
+    Terminal driver send SIGTTIN (causes to stop) to it, shell detect this
+    and tells us that the job has been stopped. Type fg to place the job
+    into fg and send SIGCONT to the process group. Similarly for the output, 
+    but whether the output from a process in the background process group
+    appears on the terminal is an option (SIGTTOUT, stty tostop)
 
 
 9.9 Shell Execution of Programs
-	Shell that doesn't support job control:
-		ps -o pid, ppid, pgid, sid, comm: the output is
-			PID	    PPID	PGID	SID	COMMAND
-			949	    947	    949	    949	sh
-			1174	949	    949	    949	ps
-		
-		No new group created if the shell doesn't support job control.
+    Shell that doesn't support job control:
+        ps -o pid, ppid, pgid, sid, comm: the output is
+            PID     PPID    PGID    SID COMMAND
+            949     947     949     949 sh
+            1174    949     949     949 ps
+        
+        No new group created if the shell doesn't support job control.
 
-		If runs in background, the only value that changes is the pid
-		of the command. If a background process tries to read from its CT, 
-		standard input of bg processes are redirected by shell to /dev/null,
-		if try to open /dev/tty (both shell and the process are trying to read from the same device),
-		the result is undefined.
-		
+        If runs in background, the only value that changes is the pid
+        of the command. If a background process tries to read from its CT, 
+        standard input of bg processes are redirected by shell to /dev/null,
+        if try to open /dev/tty (both shell and the process are trying to read from the same device),
+        the result is undefined.
+        
 
-	Shell that support job control:
-		ps -o pid, ppid, pgid, sid, comm: the output is
-			PID     PPID    PGID    SID     TPGID   COMMAND
-            2837    2818    2837    2837    5796    bash	
+    Shell that support job control:
+        ps -o pid, ppid, pgid, sid, comm: the output is
+            PID     PPID    PGID    SID     TPGID   COMMAND
+            2837    2818    2837    2837    5796    bash    
             5796    2837    5796    2837    5796    ps
-		
-		if run in background:
-			PID	PPID	PGID	SID	TPGID	COMMAND
-			2837	2818	2837	2837	2837	bash	
-			5796	2837	5796	2837	2837	ps
+        
+        if run in background:
+            PID     PPID    PGID    SID TPGID   COMMAND
+            2837    2818    2837    2837    2837    bash    
+            5796    2837    5796    2837    2837    ps
 
-		TPGID (the foreground process group ID, the attribute of the terminal, not the process)
-		is different; shell create a group for the command.
-		
-	How shell create processes when executing command in a pipelien??
+        TPGID (the foreground process group ID, the attribute of the terminal, not the process)
+        is different; shell create a group for the command.
+        
+    How shell create processes when executing command in a pipelien??
 
-		
+        
 9.10 Orphaned Process Groups
-	POSIX definition: an orphaned process group is one in which the parent
-	of every member is either itself a memeber of the group or is not a
-	member of the group's session (a process group is not orphaned as long as a process in the group has a parent in a different process group but in the same session).
+    POSIX definition: an orphaned process group is one in which the parent
+    of every member is either itself a memeber of the group or is not a
+    member of the group's session (a process group is not orphaned as long as a process in the group has a parent in a different process group but in the same session).
 
-	POSIX requres that every process in the newly orphaned process group
-	that is stopped be sent the hang-up signal (SIGHUP) followed by the
-	continue signal (SIGCONT).	
+    POSIX requres that every process in the newly orphaned process group
+    that is stopped be sent the hang-up signal (SIGHUP) followed by the
+    continue signal (SIGCONT).  
 
-	fork();
+    fork();
         // in parent
         // waits for child to stop and parent terminates
         ...sleep(5); exit(0); ...
@@ -186,17 +182,17 @@ Chapter 9: Process Relationships
         // child stops and after parent exits, creates a orphaned group, 
         ...signal(SIGHUP,...); kill(getpid(), SIGTSTP); read(..); ... 
 
-	when the parent terminated, the child was placed in a bg process group.
+    when the parent terminated, the child was placed in a bg process group.
 
-	Any process in orphaned group (in the bg group) try to read return an
-	error with error set to EIO (not stoped by the SIGTTIN signal,
-	otherwise the process group would probably never be continued).
+    Any process in orphaned group (in the bg group) try to read return an
+    error with error set to EIO (not stoped by the SIGTTIN signal,
+    otherwise the process group would probably never be continued).
 
     http://stackoverflow.com/questions/32780706/does-linux-kill-background-processes-if-we-close-the-terminal-from-which-it-has
 
 Summary
-	Sessions, which are made up of process groups.
-        Controlling terminal (/dev/tty): every sessioon can has a CT.
+    Sessions, which are made up of process groups.
+    Controlling terminal (/dev/tty): every sessioon can has a CT.
 
         Job Control:
                                   +------------+
@@ -204,14 +200,14 @@ Summary
                                   +--/----+--\-+
                                     /     |   \
                                    /      |    \
-                  (change in status)	  |     (change in status)
+                  (change in status)      |     (change in status)
                                  /        |      \
-			setpgid /         |       \   setpgid 
+                        setpgid /         |       \   setpgid 
                +----------------+         |    +-----------------+
                |bg proces gorups|         |    |fg process groups|
                +---------------\+         |    +-----------------+
                                 \         |          /
-				 \      tcsetpgrp   /
+                                 \      tcsetpgrp   /
                                   \       |        /
                        SIGTTOU,SIGTTIN    |    terminal IO and three signal
                                     \     v      /
