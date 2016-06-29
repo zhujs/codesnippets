@@ -1,90 +1,91 @@
 Chapter 14. Advanced I/O
-	Nonblocking I/O, record locking, STREAMS, I/O multiplexing, the readv
-	and writev function and the memory-mapped I/O(mmap).
+    Nonblocking I/O, record locking, STREAMS, I/O multiplexing, the readv
+    and writev function and the memory-mapped I/O(mmap).
 
 14.2 Nonblocking I/O
-	System calls are divided into two categories: the "slow" ones ( can
-	block forever )	the other system call .
+    System calls are divided into two categories: the "slow" ones ( can
+    block forever ) and the other system call.
 
-	Nonblocking I/O: If the operation cannot be completed, the call returns
-	immediately.
+    Nonblocking I/O: If the operation cannot be completed, the call returns
+    immediately.
 
-	Two way to specify nonblocking I/O:
-	1. Call open withe the O_NONBLOCK flag.
-	2. Call fcntl to turn the O_NONBLOCK file status flag if the fd is
-	already open.
+    Two way to specify nonblocking I/O:
+    1. Call open with the O_NONBLOCK flag.
+    2. Call fcntl to turn the O_NONBLOCK file status flag if the fd is
+    already open.
 
-	Note: the System V used the O_NDELAY, but a read read return 0;
-	FNDELAY in 4.3BSD affects all users of the terminal or socket;
-	O_NONBLOCK only changes the file status flags.
+    Note: the System V used the O_NDELAY, but a read call return 0 if there
+    wasn't any data to be read. FNDELAY in 4.3BSD affects all users of the 
+    terminal or socket. O_NONBLOCK only changes the file status flags.
 
-	Polling can be implemented using nonblocking I/O in a loop , but is a
-	waste of CPU time. Sometimes we can using multiple threads to avoid
-	using the nonblocking I/O ( allow individual threads to block in I/O
-	call and make progress in others), but the overhead of synchronization
-	can add	more complexity.
+    Polling can be implemented using nonblocking I/O in a loop , but is a
+    waste of CPU time. Sometimes we can using multiple threads to avoid
+    using the nonblocking I/O (allow individual threads to block in I/O
+    call and make progress in others), but the overhead of synchronization
+    can add more complexity.
 
 14.3 Record Locking
-	Record locking prevents other processes from modifying a region of a
-	file while the first process is reading or modifying that portion of
-	the file. A better term is byte-range locking because kernel doesn't 
-	have a notion of records in a file.
+    Record locking prevents other processes from modifying a region of a
+    file while the first process is reading or modifying that portion of
+    the file. A better term is byte-range locking because kernel doesn't 
+    have a notion of records in a file.
 
-	Berkeley flock function: locks the entire file.
-	System V fcntl and lockf: supports byte range lock in a file.
-	POSIX.1: standardize of the fcntl func, lockf (XSI extension).
-
-
-	Call the fcntl:
-		fcntl( fd, F_GETLK or F_SETLK or F_SETLKW ,...);
-	Note: F_SETLKW a blocking version of F_SETLK ( W means wait ).
+    Berkeley flock() function: locks the entire file.
+    System V fcntl() and lockf(): supports byte range lock in a file.
+    POSIX.1: standardize of the fcntl func, lockf (XSI extension).
 
 
-	The third arg is a pointer to struct flock.
-	struct flock {
-		short l_type;  /* F_RDLCK, F_WRLCK, or F_UNLCK */
-		off_t l_start; /* offset in bytes, relative to l_whence */
-		short l_whence;/* SEEK_SET, SEEK_CUR, or SEEK_END */
-		off_t l_len;   /* length, in bytes; 0 means lock to EOF */
-		pid_t l_pid;   /* the process holds the lock, returned with 
-				F_GETLK */
-	};
+    Call the fcntl:
+        fcntl( fd, F_GETLK or F_SETLK or F_SETLKW ,...);
+    Note: F_SETLKW a blocking version of F_SETLK ( W means wait ).
 
-	
-	The locking rule is similar to the read-write lock for multiple 
-	threads, and it may starve process with pending write-lock (depend on 
-	implementation). 
 
-	For multiple lock requests made by a single process,a subsequent
-	attempt to place a lock on the same range by the same process will 
-	replace the existiong lock with the new one (assuming that not racing
-	with any other processes trying to lock the same portion of the file).
+    The third arg is a pointer to struct flock.
+    struct flock {
+        short l_type;  /* F_RDLCK, F_WRLCK, or F_UNLCK */
+        off_t l_start; /* offset in bytes, relative to l_whence */
+        short l_whence;/* SEEK_SET, SEEK_CUR, or SEEK_END */
+        off_t l_len;   /* length, in bytes; 0 means lock to EOF */
+        pid_t l_pid;   /* the process holds the lock, returned with 
+                F_GETLK */
+    };
 
-	When setting or releasing a lock on a file, the system combines or 
-	splits adjacent areas as required. We firstly lock bytes 100 through
-	199 and unlock byte 150, what happens?
+    
+    The locking rule is similar to the read-write lock for multiple 
+    threads, and it may starve process with pending write-lock (depend on 
+    implementation). 
 
-	Use F_GETLK to test a lock (check lock.l_type) and it never report our
-	own lock because F_GETLK states that the information returned applies to
-	an existing lock that would prevent us from creating our own lock.
+    For multiple lock requests made by a single process,a subsequent
+    attempt to place a lock on the same range by the same process will 
+    replace the existiong lock with the new one (assuming that not racing
+    with any other processes trying to lock the same portion of the file).
 
-	Use F_SETLK to avoid deadlock. When a deadlock is detected, the kernel
-	has to choose one process to receive the error return (this is and 
-	implementation detail). 
-	
-	Implied Inheritance and Release of Locks:
-		1. Locks are associated with a process and a file, not file
-		descriptors ( after the	process terminates or the file is
-		closed, the locks are released ).
-			fd1 = open(name,...);
-			read_lock(fd1,...);
-			fd2 = dup(fd1); // fd2 = open(name,...);
-			close(fd2);
+    When setting or releasing a lock on a file, the system combines or 
+    splits adjacent areas as required. We firstly lock bytes 100 through
+    199 and unlock byte 150, what happens?
 
-		Structure lockf are linked together from the i-node structure
-		( by FreeBSD implementation ). When closes a fd, the kernel
-		goes through it for the corresponding i-node and releases the
-		locks.
+    Use F_GETLK to test if a lock exists (check lock.l_type) and it never report 
+    our own lock because F_GETLK states that the information returned applies to
+    an existing lock that would prevent us from creating our own lock.
+
+    Use F_SETLK (nonblocking) to avoid deadlock. When a deadlock is detected,
+    the kernel has to choose one process to receive the error return (this is
+    and implementation detail). 
+    
+    Implied Inheritance and Release of Locks:
+        1. Locks are associated with a process and a file, not file
+        descriptors (after the process terminates or the file is
+        closed, the locks are released).
+            fd1 = open(name,...);
+            read_lock(fd1,...);
+            fd2 = dup(fd1); // or fd2 = open(name,...);
+            close(fd2);
+            // after the close(fd2), the lock that was obtained on fd1 is released.
+
+        Structure lockf are linked together from the i-node structure
+        ( by FreeBSD implementation ). When closes a fd, the kernel
+        goes through it for the corresponding i-node and releases the
+        locks.
 
             process table 
               +------+
@@ -109,70 +110,70 @@ Chapter 14. Advanced I/O
                                                      |       |    |       |
                                                      +-------+    +-------+
 
-		2. Locks are never inherited by the child across a fork (why
-		make sense? write lock? ).
+        2. Locks are never inherited by the child across a fork (why
+        make sense? write lock? ).
 
-		3. Locks are inherited by a new program across an exec if the
-		close-on-exec is not set for a file descripto.
-		
-	Note:
-		write_lock( fd, 0, SEEK_END, 0 );
-		write( fd, buf, 1 );
-		un_lock( fd, 0, SEEK_END );
-		write( fd, buf, 1 );
+        3. Locks are inherited by a new program across an exec if the
+        close-on-exec is not set for a file descripto.
+        
+    Note:
+        write_lock(fd, 0, SEEK_END, 0); // SEEK_END to 'file end'
+        write(fd, buf, 1);              // this byte is locked
+        un_lock(fd, 0, SEEK_END);       // last byte is still locked
+        write(fd, buf, 1);              // this byte is not locked
 
-                This sequence of code will extend the file by one byte, and that
-                byte will be lockd (most implementation converts the offset 
-                specified into a absolute file offset).
+        This sequence of code will extend the file by one byte, and that
+        byte will be lockd (most implementation converts the offset 
+        specified into a absolute file offset).
 
 
-	Advisory locking versus Mandatory locking
+    Advisory locking versus Mandatory locking
 
-        Advisory lock is similar to the mutex in threads, it requires all users
-        of the file handle the record locking in a consistent way.
+    Advisory lock is similar to the mutex in threads, it requires all users
+    of the file handle the record locking in a consistent way.
 
-	Mandatory locking causes the kernel to check every open, read, and
-	write to verify that the calling process isn't violating a lock on the
-	file being accessed. It is also called enforcement-mode locking.
+    Mandatory locking causes the kernel to check every open, read, and
+    write to verify that the calling process isn't violating a lock on the
+    file being accessed. It is also called enforcement-mode locking.
 
-	It is enabled for a particulare file by turning on the set-group-ID
-	bit and turning off the group-execute bit.
-	     +------------------------+--------------------+------------------+
-	     |  Locks held by others  |  Blocking fd       |    Nonblocking fd|
-	     |                        | read    write      |    read    write |
-	     +------------------------+--------------------+------------------+
-	     |          read lock     | OK      blocks     |    OK      EAGAIN| 
-	     |                        |                    |                  |
-	     |          write lock    | blocks  blocks     |    EAGAIN  EAGAIN| 
-	     +------------------------+--------------------+------------------+
+    It is enabled for a particulare file by turning on the set-group-ID
+    bit and turning off the group-execute bit.
+         +------------------------+--------------------+------------------+
+         |  Locks held by others  |  Blocking fd       |    Nonblocking fd|
+         |                        | read    write      |    read    write |
+         +------------------------+--------------------+------------------+
+         |          read lock     | OK      blocks     |    OK      EAGAIN| 
+         |                        |                    |                  |
+         |          write lock    | blocks  blocks     |    EAGAIN  EAGAIN| 
+         +------------------------+--------------------+------------------+
 
-	Normally, open succeeds, but the next read or write follows the rule
-	shown above. If the call to open specify either O_TRUNC or O_CREAT,
-	the the open return an error of EAGAIN or EACCESS immediately,
-	regardless of whether O_NONBLOCK is specified.
+    Normally, open succeeds, but the next read or write follows the rule
+    shown above. If the call to open specify either O_TRUNC or O_CREAT and
+    the file is being locked (mandatory), the the open return an error of 
+    EAGAIN or EACCESS immediately, regardless of whether O_NONBLOCK is specified.
 
-	Note: The mandatory locking may has no effect on the unlink function;
-        (a process can create a temporary file, remove the original file, and 
-        rename the temporary file, then the file contents will be changed)
+    Note: The mandatory locking may has no effect on the unlink function;
+        (a process can create a temporary file, remove (unlink) the original file,
+        and rename the temporary file, then the file contents will be changed)
 
-	Using shell >> operators to overwrite a file may result in error
-	or block until the mandatory lock was removed depend on the way it open 
-	the file (see above); It can also be used by a malicious user to hold
-	a read lock on a file that is publicly readable;
+    Using shell >> operators to overwrite a file may result in error
+    or block until the mandatory lock was removed depend on the way it open 
+    the file (see above); It can also be used by a malicious user to hold
+    a read lock on a file that is publicly readable;
 
-	The normal UNIX System text editors do not use record locking, so the
-	final result of the file corresponds to the last process that wrote
-	the file.
+    The normal UNIX System text editors do not use record locking, so the
+    final result of the file corresponds to the last process that wrote
+    the file.
 
-	A small front-end program of this type can be written for an editor,
-	but it often doesn't work because it common for most editors to read
-	their input file and then close it (the lock is released).
+    A small front-end program of this type can be written for an editor,
+    but it often doesn't work because it is common for most editors to read
+    their input file and then close it (the lock is released).
 
 
 
 14.4 STREAMS
-	A stream provides a full-duplex path between a user process and a device driver. There is no need for a stream to talk to a hardware device; a stream can also be used with a pseudo-device driver.
-	
+    A STREAM provides a full-duplex path between a user process and a device driver. There is no need for a STREAM to talk to a hardware device; a STREAM can also be used with a pseudo-device driver.
+    
                            +--------------+
                            | user process |
                            +--------------+
@@ -196,15 +197,15 @@ Chapter 14. Advanced I/O
                      +------------------------------+
 
 
-	Beneath the stream head, we can push processing modules onto the stream. This is done using an ioctl command. 
+    Beneath the stream head, we can push processing modules onto the stream. This is done using an ioctl command. 
 
-	All input and output under STREAMS is based on messages. Between the user process and the stream head, a message consists of a message type, optional control information, and optional data. The control information and data are specified by strbuf structures:
+    All input and output under STREAMS is based on messages. Between the user process and the stream head, a message consists of a message type, optional control information, and optional data. The control information and data are specified by strbuf structures:
 
-	struct strbuf {
-		int maxlen; /* size of buffer */
-		int len;    /* number of bytes currently in buffer */
-		char *buf;  /* pointer to buffer */
-	};
+    struct strbuf {
+        int maxlen; /* size of buffer */
+        int len;    /* number of bytes currently in buffer */
+        char *buf;  /* pointer to buffer */
+    };
 
 Why do we need to pass both control information and data? Providing both allows us to implement service
 interfaces (protocols) between a user process and a stream (Sending a UDP package, the control information is the address of destination) 
@@ -213,14 +214,14 @@ There are about 25 different types oef messages, but only a few of these are use
 
 
 Three message types:
-	M_DATA (user data for I/O);
-	M_PROTO (protocol control information);
-	M_PCPROTO (high-priority protocol control information);
+    M_DATA (user data for I/O);
+    M_PROTO (protocol control information);
+    M_PCPROTO (high-priority protocol control information);
 
 Every message on a stream has a queueing priority:
-	High-priority messages (highest priority)
-	Priority band messages: 1-255
-	Ordinary messages (lowest priority): 0
+    High-priority messages (highest priority)
+    Priority band messages: 1-255
+    Ordinary messages (lowest priority): 0
 
 
 STREAMS ioctl operations: 
@@ -235,12 +236,12 @@ The write mode and read mode
 
 With a stream, the topmost processing module specifies the minimum and maximum packet sizes that can be sent downstream.
 Unless the stream refers to a STREAM pipe or STREAM FIFO, a zero-length message (write function) is sent downstream. (two ioctl commands fetch and set the write mode for a stream: I_GWROPT, I_SWROPT)
-	SNDZERO: a zero-length message is sent downstream for pipe or FIFO (write function);
-	SNDPIPE: causes SIGPIPE to be sent to calling process that calls either write or putmsg after an error has occurred on a stream.
+    SNDZERO: a zero-length message is sent downstream for pipe or FIFO (write function);
+    SNDPIPE: causes SIGPIPE to be sent to calling process that calls either write or putmsg after an error has occurred on a stream.
 
 Consider what happens if we read from a STREAMS device. There are two potential problems:
-	1. What happens to the record boundaries associated with the messages on a stream (default: byte stream mode)?
-	2. What happens if we call read and the next message on the stream has control information (default: return error)?
+    1. What happens to the record boundaries associated with the messages on a stream (default: byte stream mode)?
+    2. What happens if we call read and the next message on the stream has control information (default: return error)?
 
 Two ioctl commands fetch and set the read mode for a stream: I_RDROPT, I_SRDOPT;
 
@@ -250,10 +251,10 @@ I/O multiplexing:
 
 
 
-	                          +------------+
-              user at a ------->  |  telnet    |    -------->    telnetd
-              terminal  <-------- | command    |    <---------   daemon
-                                  +------------+
+                          +------------+
+      user at a ------->  |  telnet    |    -------->    telnetd
+      terminal  <-------- | command    |    <---------   daemon
+                          +------------+
                                 ||
                                 ||
                                 ||
@@ -262,7 +263,7 @@ I/O multiplexing:
                             +------------+ (sends SIGUSR1 signal to child when terminates)
                             |  telnet    | 
                            /| command    | \
-	                  / +------------+  \
+                          / +------------+  \
                          /    (parent)       \
                         /                     \
               user at a                           telnetd
@@ -286,7 +287,7 @@ I/O multiplexing:
                                 ||
                                 ||
                                 vv
-                asynchronous I/O:   not all systems support this feature (it is an optional facility in the Single UNIX Specification). System V provides the SIGPOLL signal for this technique, but this signal works only if the descriptor refers to a STREAMS device. BSD has a similar signal, SIGIO , but it has similar limitations: it works only on descriptors that refer to terminal devices or networks.The second problem with this technique is that there is only one of these signals per process
+                asynchronous I/O:   not all systems support this feature (it is an optional facility in the Single UNIX Specification). System V provides the SIGPOLL signal for this technique, but this signal works only if the descriptor refers to a STREAMS device. BSD has a similar signal, SIGIO, but it has similar limitations: it works only on descriptors that refer to terminal devices or networks. The second problem with this technique is that there is only one signal per process (what if we enable more than one descriptor for asynchronous I/O?).
                 system V: establish the signal handler, calls ioctl to specify the conditions that should generate the signal;
                 BSD: establish the signal handler (SIGURG is generated only for out-of-band data), set the process ID or process group ID to receive the the signal for the descriptor (fcntl, F_SETOWN), enable asynchronous I/O on the descriptor (fcntl, F_SETFL, O_ASYNC);
                                 ||
@@ -303,14 +304,14 @@ readn and writen functions:
 
 
 14.9 Memory-Mapped I/O
-	Memory-mapped I/O lets us map a file on disk into a buffer in memory so
-	that, when we fetch bytes from the buffer, the corresponding bytes of the
-	file are read. Similarly, when we store data in the buffer, the corresponding 
-	bytes are automatically written to the file (memory-mapped file option in SUS).
+    Memory-mapped I/O lets us map a file on disk into a buffer in memory so
+    that, when we fetch bytes from the buffer, the corresponding bytes of the
+    file are read. Similarly, when we store data in the buffer, the corresponding 
+    bytes are automatically written to the file (memory-mapped file option in SUS).
 
 
-	void *mmap( void, *addr, size_t len, int prot, int flag, int filedes,
-		off_t off);
+    void *mmap( void, *addr, size_t len, int prot, int flag, int filedes,
+        off_t off);
 
         the value of addr and off are required to be multiples of the system's virtual memory page size;
 
@@ -339,7 +340,7 @@ readn and writen functions:
         MAP_SHARED: the store operations modify the mapped file.
         MAP_PRIVATE: the store operations cause a private copy of the mapped file to be created. Any modifications affect the copy not the original program file.
 
-	We cannot append to a file with mmap!! We must first grow the file (call lseek and then write one byte to set the size of the file, ftruncate function is not guaranteed to extend the size of a file)!!
+    We cannot append to a file with mmap!! We must first grow the file (call lseek and then write one byte to set the size of the file, ftruncate function is not guaranteed to extend the size of a file)!!
 
         SIGSEGV: used to indicate that we have tried to access memory that is not available to us or try to store into a mapped region that we specified to mmap as read-only.
         
@@ -351,6 +352,6 @@ readn and writen functions:
         msync(): fluch the changes to the file that backs the mapping;
         munmap(): unmpa the memory-mapped region;
 
-	A memory-mapped region is automatically unmapped when the process terminates or by calling munmap directly. Closing the file descriptor filedes does not unmap the region.the call to munmap does not cause the contents of the mapped region to be written to the disk file. The updating of the disk file for a MAP_SHARED region happens automatically by the kernel's virtual memory algorithm as we store into the memory-mapped region. Modifications to memory in a MAP_PRIVATE region are discarded when the region is unmapped.
+    A memory-mapped region is automatically unmapped when the process terminates or by calling munmap directly. Closing the file descriptor filedes does not unmap the region. the call to munmap does not cause the contents of the mapped region to be written to the disk file. The updating of the disk file for a MAP_SHARED region happens automatically by the kernel's virtual memory algorithm as we store into the memory-mapped region. Modifications to memory in a MAP_PRIVATE region are discarded when the region is unmapped.
 
-	Memory-mapped I/O is faster when copying one regular file to another. There are limitations. We can't use it to copy between certain devices (such as a network device or a terminal device), and we have to be careful if the size of the underlying file could change after we map it. Nevertheless, some applications can benefit from memory-mapped I/O, as it can often simplify the algorithms, since we manipulate memory instead of reading and writing a file. One example that can benefit from memory-mapped I/O is the manipulation of a frame buffer device that references a bit-mapped display.
+    Memory-mapped I/O is faster when copying one regular file to another. There are limitations. We can't use it to copy between certain devices (such as a network device or a terminal device), and we have to be careful if the size of the underlying file could change after we map it. Nevertheless, some applications can benefit from memory-mapped I/O, as it can often simplify the algorithms, since we manipulate memory instead of reading and writing a file. One example that can benefit from memory-mapped I/O is the manipulation of a frame buffer device that references a bit-mapped display.

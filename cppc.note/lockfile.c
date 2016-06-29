@@ -1,6 +1,8 @@
-#include "apue.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 char	buf[500000];
 
@@ -39,9 +41,7 @@ int main( int argc, char** argv)
 		exit(1);
 	}
 
-
 	int newfd = dup( fd );
-
 	close( newfd );
 
 	// the chile process should acquire the write lock of the file
@@ -49,7 +49,6 @@ int main( int argc, char** argv)
 	pid_t pid = fork();
 	if( pid == 0 )
 	{
-
 		if( lockfile( fd, F_SETLK, F_WRLCK, 0, SEEK_SET, 0 ) < 0 )
 		{
 			perror("lockfile");

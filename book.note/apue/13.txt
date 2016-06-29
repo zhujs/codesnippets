@@ -1,99 +1,86 @@
-
-If a process stops and becomes an orphaned process group, SIGHUP and SIGCONT is sent to the orphaned group.
-
 13 Daemon Process
-	Processes that live for a long time, have no a controlling terminal.
+    Processes that live for a long time, have no a controlling terminal.
 
 13.2 Daemon Characteristics
-	Has no controlling terminal, terminal process group ID is -1. 
+    Has no controlling terminal, terminal process group ID is -1 （前台进程组ID）. 
 
-	All the user-level daemons are process group leaders and session
-	leaders	and are the only process in their process proup and session.	
+    All the user-level daemons are process group leaders and session
+    leaders and are the only process in their process proup and session.    
 
 
-	
+    
 13.3 Coding rules
-	1. Set file mode creation mask to 0.	
-	2. Call fork and have the parent exit (why??).
-	3. Call setsid. Can for again to avoid acquiring controlling terminal.
-	4. Change ther CWD to root directory to prevent fs from being
-	unmounted.
-	5. Unneeded file descriptors should be closed.
-	6. Some daemons open fd 0, 1, 2 to /dev/null.
+    1. Set file mode creation mask to 0.    
+    2. Call fork and have the parent exit (why?? 为了使setsid调用成功且可以在shell中启动该服务).
+    3. Call setsid. Can fork again to avoid acquiring controlling terminal.
+    4. Change ther CWD to root directory to prevent fs from being
+    unmounted.
+    5. Unneeded file descriptors should be closed.
+    6. Some daemons open fd 0, 1, 2 to /dev/null.
 
 
 
 13.4 Error Logging 
 
-	BSD syslog facility:
-	User processes use the function syslog to communicate with the daemon
-	service syslogd ( UNIX domain datagram socket or UDP port 514 ), if use
-	UDP, explicit network programming is required; Kernel routines use the
-	log function ( /dev/klog device ).
+    BSD syslog facility:
+    User processes use the function syslog to communicate with the daemon
+    service syslogd ( UNIX domain datagram socket or UDP port 514 ), if use
+    UDP, explicit network programming is required; Kernel routines use the
+    log function ( /dev/klog device ).
 
-	syslogd daemon reads all three forms of log messages and determines
-	where different classes of messages are to be sent (use the
-	/etc/syslog.conf configuration file), say, logged in user or file or
-	another host .
-	
-		
-	Calling sequence:
-	openlog: specifies an identity that is added to each log message and 
-	bitmask option and facility arg (syslogd uses it to handle the message).
+    syslogd daemon reads all three forms of log messages and determines
+    where different classes of messages are to be sent (use the
+    /etc/syslog.conf configuration file), say, logged in user or file or
+    another host .
+    
+        
+    Calling sequence:
+    openlog: specifies an identity that is added to each log message and 
+    bitmask option and facility arg (syslogd uses it to handle the message).
 
-	syslog: specifies priority (a combination of facility an a level) and
-	message( %m will be replaced strerror message ).
-	
-	closelog: closes the fd.
+    syslog: specifies priority (a combination of facility an a level) and
+    message( %m will be replaced strerror message ).
+    
+    closelog: closes the fd.
 
-	A variant function handles variable arg lists: vsyslog(...);
+    A variant function handles variable arg lists: vsyslog(...);
 
 
 13.5 Single-Instance Daemons
-	Only a single copy of the daemon should be running at a time for proper
-	operation (exclusive access to device): cron daemon.
+    Only a single copy of the daemon should be running at a time for proper
+    operation (exclusive access to device): cron daemon.
 
-	Device drive will sometimes prevent multiple opens of the corresponding
-	device node in /dev. Otherwise, we turn to the file- and record-locking
-	mechanism.
-		creates a file and places a write lock on the entire file, only
-		one such write lock will be allowed to be created. The lock will
-		be removed automatically if the daemon exits.
+    Device drive will sometimes prevent multiple opens of the corresponding
+    device node in /dev. Otherwise, we turn to the file- and record-locking
+    mechanism.
+    creates a file and places a write lock on the entire file, only
+    one such write lock will be allowed to be created. The lock will
+    be removed automatically if the daemon exits.
 
-	File- and record-locking provides a convenient mutual-exclusion
-	mechanism ( Try to create a file ( can write its process ID which allow
-	the administrators to identify the process easily)  and lock, if exits
-	truncate the file ).
+    File- and record-locking provides a convenient mutual-exclusion
+    mechanism ( Try to create a file ( can write its process ID which allow
+    the administrators to identify the process easily)  and lock, if exits
+    truncate the file ).
 
 
 13.6 Daemon Conventions
-	1. If the daemon uses a lock file, the file path usually is 
-	/var/run/name.pid
+    1. If the daemon uses a lock file, the file path usually is 
+    /var/run/name.pid
 
-	2. The configuration file is usually /etc/name.conf
+    2. The configuration file is usually /etc/name.conf
 
-	3. Daemons are usually started from one of the system initialization
-	file, daemons can also be configurated to restart by init.
+    3. Daemons are usually started from one of the system initialization
+    file, daemons can also be configurated to restart by init.
 
-	4. Daemons need to be restarted to account for the configuration change
-	or catch SIGHUP and reread the configuration files if the signal is
-	safely to use.
+    4. Daemons need to be restarted to account for the configuration change
+    or catch SIGHUP and reread the configuration files if the signal is
+    safely to use.
 
 
 Summary
-	There are several rules to initialize our own process to run as a
-	daemon. A common use for a daemon process is as a server process.
+    There are several rules to initialize our own process to run as a
+    daemon. A common use for a daemon process is as a server process.
 
-	Since a daemon normally doesn't have a controlling terminal, we use
-	syslog function to log message, we also discussed several daemon
-	conventions.
-	
-
-	
-
-	
-
-
-
-
-
+    Since a daemon normally doesn't have a controlling terminal, we use
+    syslog function to log message, we also discussed several daemon
+    conventions.
