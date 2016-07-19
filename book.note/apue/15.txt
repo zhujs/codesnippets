@@ -1,11 +1,10 @@
-
 15.1
 The summary of UNIX System IPC:
 
-IPC types		            SUS       FreeBSD    Linux     Mac     Solaris
+IPC types                   SUS       FreeBSD    Linux     Mac     Solaris
                                        5.2.1    2.4.22     10.3
 
-half-duplex pipes    	    *          (full)     *        *      (full)
+half-duplex pipes           *          (full)     *        *      (full)
 FIFOs                       *            *        *        *        *
 full-duplex pipes          allowed      *,UDS   opt,UDS   UDS      *,UDS
 named full-duplex pipes    XSI option    UDS    opt,UDS   UDS      *,UDS
@@ -25,8 +24,8 @@ Only the last two rows are generally supported for IPC between processes on diff
 
 
 15.2
-                 parent                                   child
-             +---------------+        fork           +---------------+
+                 parent              fork                 child
+             +---------------+                       +---------------+
              |               |                       |               |
              | fd[0]   fd[1] +----------------+      |  fd[0]  fd[1] |
              +---------------+                |      +---------------+
@@ -38,7 +37,7 @@ Only the last two rows are generally supported for IPC between processes on diff
                           |  +-------------+<---+-----------------+
                           +---------------------+
 
-Pipes are Half-duplex and an be used only between processes that have a common ancestor. fstat function return a file type of FIFO (S_ISFIFO), st_size member of stat structure is undefined.
+Pipes are Half-duplex and can be used only between processes that have a common ancestor. fstat function return a file type of FIFO (S_ISFIFO), st_size member of stat structure is undefined.
 
 If we read from a pipe whose write end has been closed, read returns 0 to indicate an end of file after all the data has been read.
 
@@ -48,29 +47,30 @@ If we write to a pipe whose read end has been closed, the signal SIGPIPE is gene
 For a pipe (or FIFO), the constant PIPE_BUF specifies the kernel's pipe buffer size. A write of PIPE_BUF bytes or less will not be interleaved with the write s from other processes to the same pipe (or FIFO).
 
 Redirect the standard input:
-	pid = fork();
-	...
-	if (pid == 0) /* in child */
-	{
-		close(fd[1]);	/* close write end */
+    pid = fork();
+    ...
+    if (pid == 0) /* in child */
+    {
+        close(fd[1]);   /* close write end */
 
-		/* a defensive programming measure when we call
-		dup2 and close to duplicate a descriptor */
-		/* if equivalent, the single copy of the descriptor 
-		will be closed */
+        /* 
+         * a defensive programming measure when we call
+         * dup2() and close() to duplicate a descriptor
+         */
+        if (fd[0] != STDIN_FILENO )
+        {
+            dup2(fd[0], STDIN_FILENO);
+            close(fd[0]);
+            // if equivalent, the single copy of the descriptor
+            // will be closed
+        }
 
-		if (fd[0] != STDIN_FILENO )
-		{
-			dup2(fd[0], STDIN_FILENO);
-			close(fd[0]);
-		}
-
-		...
-		execl(...);
-	}
+        ...
+        execl(...);
+    }
                                                          
 
-using pipes for parent-child synchronization:
+using two pipes for parent-child synchronization:
 
                    parent                   child
                +------------+    "p"    +------------+   
@@ -81,14 +81,13 @@ using pipes for parent-child synchronization:
                                                          
 
 15.3
-
-Result of fp = popen( cmdstring, "r"):
+Result of fp = popen(cmdstring, "r"):
                    parent                 cmdstring(child)
                +------------+           +------------+   
                |          fp| <-------- |stdout      |   
                +------------+           +------------+   
 
-Result of fp = popen( cmdstring, "w"):
+Result of fp = popen(cmdstring, "w"):
                    parent                 cmdstring(child)
                +------------+           +------------+   
                |          fp| --------> |stdin       |   
@@ -97,39 +96,43 @@ Result of fp = popen( cmdstring, "w"):
 The cmdstring is executed by the shell, as in: sh -c cmdstring
 The pclose function closes the standard I/O stream, waits for the command to terminat, and return the termination status of the shell (like system()).
 
+    
+    static pid_t *childpid = NULL;
 
-	popen(const char *cmdstring, const char *type)
-	{
-		/* check the type argument */
-		/* initialize the childpid array when first called, which is used to save the child's process ID */
+    popen(const char *cmdstring, const char *type)
+    {
+        /* check the type argument */
+        /* initialize the childpid array when first called, which is used to save the child's process ID */
 
-		pid = fork();
-		...
-		if(pid == 0){
-			/* close unnecessary pipe end */
-			/* close the stream that are still open (in childpid array)*/
-			execl(...);
-			_exit(127);
-		}
+        pid = fork();
+        ...
+        if(pid == 0){
+            /* close unnecessary pipe end */
+            /* close the stream that are still open (in childpid array),
+             * because it's in child process now 
+            */
+            execl(...);
+            _exit(127);
+        }
 
-		/* parent continues, return the FILE pointer */
-		/* fdopen */
-		/* remember child pid for this fd in childpid */
-	}
+        /* parent continues, return the FILE pointer */
+        /* fdopen */
+        /* remember child pid for this fd in childpid */
+    }
 
-	pclose( FILE *fp )
-	{
-		/* check childpid is NULL or not */
-		/* check fp is opened by popen() or not */
-		/* fileno */
+    pclose( FILE *fp )
+    {
+        /* check childpid is NULL or not */
+        /* check fp is opened by popen() or not */
+        /* fileno */
 
-		/* waits for the child, if caller catch SIGCHLD, the waitpid
-		is interrupted (return -1, errno is set to ECHILD) */
-		while (waitpid(pid, &stat, 0) < 0)
-			if (errno != EINTR)
-				return -1;
-		return stat;
-	}
+        /* waits for the child, if caller catch SIGCHLD, the waitpid
+        is interrupted (return -1, errno is set to ECHILD) */
+        while (waitpid(pid, &stat, 0) < 0)
+            if (errno != EINTR)
+                return -1;
+        return stat;
+    }
 popen should never be called by a set-user-ID or set-group-ID program.
 
 
@@ -142,25 +145,26 @@ filter program:
                      |                       ^
                      |prompt                 | user input
                      v                       |
-                       user at a terminal
+
+                         user at a terminal
 
 
-	int c;
-	while ((c = getchar()) != EOF) {
-	if (isupper(c))
-		c = tolower(c);
-		if (putchar(c) == EOF)
-			err_sys("output error");
+    int c;
+    while ((c = getchar()) != EOF) {
+    if (isupper(c))
+        c = tolower(c);
+        if (putchar(c) == EOF)
+            err_sys("output error");
 
-		/* fflush standard output after writing a newline
-		because it filter a terminal input stream*/
-		if (c == '\n')
-			fflush(stdout);  
-	}
+        /* fflush standard output after writing a newline
+        because it filter a terminal input stream*/
+        if (c == '\n')
+            fflush(stdout);  
+    }
 
 
 15.4
-A filter becomes a coprocess when the same program generates the filter's input and reads the filter's output. popen gives us a one-way pipe to the standard input or from the standard output of another process.
+A filter becomes a coprocess when a program generates the filter's input and reads the filter's output. popen gives us a one-way pipe to the standard input or from the standard output of another process.
 
                    parent                child(coprocess)
                +------------+           +------------+   
@@ -175,23 +179,24 @@ If the coprocess use standard I/O to read the data while the parent is blocked r
         In coprocess:
 
         ...
-	/* the pipe is fully buffered, the fgets is blocks
-	at the same time, the parent is blocked reading from the pipe*/
+    /* the pipe is fully buffered, the fgets is blocks
+    at the same time, the parent is blocked reading from the pipe*/
         while( fgets(line,  MAXLINE, stdin ) ) != NULL ) {
-       		/* do the staff */ 
-       		...
+            /* do the staff */ 
+            ...
         }
 
 we can change that by adding the code before the while loop:
-	/* set the pipe to be line buffered */
-	if ( setvbuf(stdin, NULL, _IOLBF, 0) !=0 )
-		...
-	if ( setvbuf(stdout, NULL, _IOLBF, 0) !=0 )
-		...
+    /* set the pipe to be line buffered */
+    if ( setvbuf(stdin, NULL, _IOLBF, 0) !=0 )
+        ...
+    if ( setvbuf(stdout, NULL, _IOLBF, 0) !=0 )
+        ...
 
 If we cannot access to the program that we're piping the output to:
-	#! /bin/awk -f
-	{ print $1 + $2 }
+    #! /bin/awk -f
+    { print $1 + $2 }
+
 We are unable to modify the executable of awk in any way to change the way the standard I/O buffering is handled. Use pseudo terminals to avoid this problem.
 
 
@@ -200,8 +205,8 @@ FIFOs are sometimes called named pipes.
 Creating a FIFO is similar to creating a file: mkfifo(pathname, mode) or mknod function. Open the FIFO with the open function, the normal file I/O function all work with FIFOs.
 
 When open a FIFO, the nonblocking flag ( O_NONBLOCK ) affects what happens:
-	O_NONBLOCK not specified: an open for read-only blocks until some other process opens the FIFO for writing. Similarly, an open for write-only blocks until some other process opens the FIFO for reading.
-	O_NONBLOCK is specified: an open for read-only returns immediately. But an open for write-only returns -1 with errno set to ENXIO if no process has the FIFO open for reading.
+    O_NONBLOCK not specified: an open for read-only blocks until some other process opens the FIFO for writing. Similarly, an open for write-only blocks until some other process opens the FIFO for reading.
+    O_NONBLOCK is specified: an open for read-only returns immediately. But an open for write-only returns -1 with errno set to ENXIO if no process has the FIFO open for reading.
 
 
 Using a FIFO and tee to send a stream to two different processes:
@@ -218,13 +223,13 @@ Using a FIFO and tee to send a stream to two different processes:
 FIFOs can be used as rendezvous points in client-server applications to pass data between the clients and the servers. Clients send the requests to a server using the a well-known FIFO, the server then creates a unique FIFO for each client, using a pathname based on the client's process ID.
 
 Several limitation:
-	it is impossible for the server to tell whether a client crashes. This causes the client-specific FIFOs to be left in the file system. 
-	the server also must catch SIGPIPE, since it's possible for a client to send a request and terminate before reading the response, leaving the client-specific FIFO with one writer (the server) and no reader. 
-	
+    it is impossible for the server to tell whether a client crashes. This causes the client-specific FIFOs to be left in the file system. 
+    the server also must catch SIGPIPE, since it's possible for a client to send a request and terminate before reading the response, leaving the client-specific FIFO with one writer (the server) and no reader. 
+    
 If the server opens its well-known FIFO read-only (since it only read s from it) each time the number of clients goes from 1 to 0, the server will read an end of file on the FIFO. To prevent the server from having to handle this case, a common trick is just to have the server open its well-known FIFO for read–write.
-	open for read non-blocking;
-	open for write;
-	clear the non-blocking flag for read fd;
+    open for read non-blocking;
+    open for write;
+    clear the non-blocking flag for read fd;
 
 
 15.6
@@ -237,18 +242,18 @@ ftok function is used to create a key.
 Whenever an IPC structure is being created (by calling msgget, semget, or shmget), a key must be specified. A new IPC structure is created if either key is IPC_PRIVATE or key is not currently associated with an IPC structure of the particular type and IPC_CREAT bit of flag is specified (also note the IPC_EXCL bit).
 
 Cannot use the IPC_PRIVATE to reference an existing IPC structure (but we can pass the associated identifier to other processes and then use that identifier in the other IPC calls).
-	
+    
 Every IPC structure has an associated ipc_perm structure:
 
 /* initialized when the IPC structure is created, modified with the msgctl, semctl, shmctl calls */
 structure ipc_perm {
-	uid_t uid; /* owner's effective user id */
-	gid_t gid; /* owner's effective group id */
-	uid_t cuid; /* creator's effective user id */
-	gid_t cgid; /* creator's effective group id */
-	mode_t mode; /* access modes, read, write */
+    uid_t uid; /* owner's effective user id */
+    gid_t gid; /* owner's effective group id */
+    uid_t cuid; /* creator's effective user id */
+    gid_t cgid; /* creator's effective group id */
+    mode_t mode; /* access modes, read, write */
 
-	... /* other fields depends on implementation */
+    ... /* other fields depends on implementation */
 };
 
 
@@ -282,19 +287,19 @@ Once a shared memory segment has been created, a process attaches it to its addr
 
 Use mmap and /dev/zero create a shared memory between related processes (not in Mac OS X 10.3)
 
-	fd = open("/dev/zero", O_RDWR);
-	/* must specify the MPA_SHARED flag, initialize the memory with 0 */
-	area = mmap( 0, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-	close (fd); 
-	
-	fork();
-	/* accesses the shared memory in child or parent (another way: thread) */
+    fd = open("/dev/zero", O_RDWR);
+    /* must specify the MPA_SHARED flag, initialize the memory with 0 */
+    area = mmap( 0, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close (fd); 
+    
+    fork();
+    /* accesses the shared memory in child or parent (another way: thread) */
 
 
 Anonymous memory mapping is similar to the /dev/zero feature.
-	/* note the MAP_ANON and -1 argument */
-	area = mmap(0, SIZE, PROT_READ | PROT_WRITE,
-		MAP_ANON | MAP_SHARED, -1, 0);
+    /* note the MAP_ANON and -1 argument */
+    area = mmap(0, SIZE, PROT_READ | PROT_WRITE,
+        MAP_ANON | MAP_SHARED, -1, 0);
 
 Applications can use the XSI shared memory functions, or they can use mmap to map the same file into their address spaces using the MAP_SHARED flag (unrelated processes).
 
@@ -302,14 +307,14 @@ Applications can use the XSI shared memory functions, or they can use mmap to ma
 15.10
 The simplest type of relationship is to have the client fork and exec the desired server. Two half-duplex pipes can be created before the fork to allow data to be transferred in both directions (or use only a full-duplex pipe). The server that is executed can be a set-user-ID program, giving it special privileges. Also, the server can determine the real identity of the client by looking at its real user ID.
 
-With this arrangement, we can build an open server that allows certain users permissions that they don't normally have (by checking the read ID and passing back the file descriptor).
+With this arrangement, we can build an open (open a file) server that allows certain users permissions that they don't normally have (by checking the read ID and passing back the file descriptor).
 
 The other type of server is a daemon process that is contacted using some form of IPC by all clients. With FIFOs, we saw that an individual per client FIFO is also required if the server is to send data back to the client. If the client–server application sends data only from the client to the server, a single well-known FIFO suffices.
 
 It is impossible for the server to tell whether a client crashes by using FIFOs or XSI IPC. 
 
-The technique used to allow the server to identity the clien (using FIFO):
-	checks the st_uid field of the stat structure of the FIFO file (assuming that e-ID is equivalent to the r-ID);
-	verifies that only the user-read and user-write permissions;
-	checks that the FIFO is recent;
+The technique used to allow the server to identity (eID) the client (using FIFO):
+    checks the st_uid field of the stat structure of the FIFO file (assuming that e-ID is equivalent to the r-ID);
+    verifies that only the user-read and user-write permissions of FIFO;
+    checks that the FIFO is recent;
 
