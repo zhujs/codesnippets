@@ -1,0 +1,138 @@
+Mock意为something made as an imitation。为什么在测试中需要使用到Mock呢？要是你想测试你的一个删除文件的函数是否成功？或是你从数据库里查询的数据是否正确？
+
+这些操作首先消耗测试的时间及资源，同时还依赖于你测试时的系统环境。因此，要是你用一个Mock对象来模拟你的数据库，这样问题就轻松解决啦！
+
+单元测试还有不少词汇，在单元测试中使用的Test objects被称作Test doubles（由Stunt doubles而来），有下面几种doubles
+
+Dummy objects: are passed around but never actually used. Usually they are just used to fill parameter lists.
+
+Fake objects: actually have working implementations, but usually take some shortcut which makes them not suitable for production (an in memory database is a good example).
+
+Stubs objects: provide canned answers to calls made during the test, usually not responding at all to anything outside what's programmed in for the test. Stubs may also record information about calls, such as an email gateway stub that remembers the messages it 'sent', or maybe only how many messages it 'sent'.
+
+Mocks: are what we are talking about here: objects pre-programmed with expectations which form a specification of the calls they are expected to receive.
+
+Mock对象与其它几个的区别是，Mock使用的是Behavior verification，其它的会使用State verification（Stubs也可以使用behavior verification），Stubs通常是实现了接口的简单测试对象~~
+
+
+
+你当然可以自己写一个Mock对象，但在各语言的实现中，已经有很多现成的Mock框架可以使用了，Java的Mockito就是其中一个～
+
+Mockito主要API：
+    // 生成一个模仿Calendar的Mock对象
+    Calendar mockedCalendar = mock(Calendar.class); 
+
+    // 指定调用mockedCalendar.get(Calendar.YEAR)时返回数值：2020
+    when(mockedCalendar.get(Calendar.YEAR)).thenReturn(2020);
+
+    List myMockedList = mock(ArrayList.class);
+    // 指定无论使用任何参数调用myMockedList.get()方法时都返回数值：5
+    when(myMockedList.get(anyInt())).thenReturn(5);
+    when(myMockedList.isEmpty()).thenReturn(false);
+
+    // 第一次调用get(0)返回"target"，其后均返回"others"
+    when(myMockedList.get(0)).thenReturn("target").thenReturn("others");
+    //when(myMockedList.get(0)).thenReturn("target", "others", "more");
+
+    // 指定抛出异常
+    when(myMockedList.get(anyInt())).thenThrow(new NullPointerException());
+    // 指定抛出异常（方法返回值为void里使用）
+    doThrow(new RuntimeException()).when(myMockedList).clear();
+
+    // 验证方法调用的次数
+    verify(myMockedList).get(0);
+    verify(myMockedList, times(3)).add(anyObject());
+    verify(myMockedList, never()).remove(anyObject());
+    verify(myMockedList, atMost(1)).clear();
+
+
+    // Spy对象，真实调用会转到实际的底层类，有点像包装类，感觉
+    List list = new LinkedList();
+    List spy = spy(list);
+
+    //You have to use doReturn() for stubbing
+    doReturn("foo").when(spy).get(0);
+    // 不能使用该方法来模仿返回值，spy.get(0)调用的是list.get(0)，因此抛出异常
+    // when(spy.get(0)).thenReturn("foo"); 
+
+    @InjectMocks所标记的field将会由Mockito初始化，参数是由@Mock或@Spy标记的field
+
+
+当然之前也用过Python中的Mock模块（在Python 3.0中已经被整合到unittest.mock中啦），具体来讲，原理是差不多的，其中的差别或许是在语言特性与API中～
+    Python中的Mock API：
+    #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from mymodule import RemovalService, UploadService
+
+import mock
+import unittest
+
+class RemovalServiceTestCase(unittest.TestCase):
+    
+    @mock.patch('mymodule.os.path')
+    @mock.patch('mymodule.os')
+    def test_rm(self, mock_os, mock_path):
+        # instantiate our service
+        reference = RemovalService()
+        
+        # set up the mock
+        mock_path.isfile.return_value = False
+        
+        reference.rm("any path")
+        
+        # test that the remove call was NOT called.
+        self.assertFalse(mock_os.remove.called, "Failed to not remove the file if not present.")
+        
+        # make the file 'exist'
+        mock_path.isfile.return_value = True
+        
+        reference.rm("any path")
+        
+        mock_os.remove.assert_called_with("any path")
+      
+      
+class UploadServiceTestCase(unittest.TestCase):
+
+    @mock.patch.object(RemovalService, 'rm')
+    def test_upload_complete(self, mock_rm):
+        # build our dependencies
+        # 或者直接使用Mock对象
+        # 最好不要使用Mock或Magic对象
+        # 在mock.patch中也可以指定autospec的～～
+        # mock_removal_service = mock.create_autospec(RemovalService)
+        removal_service = RemovalService()
+        reference = UploadService(removal_service)
+        
+        # call upload_complete, which should, in turn, call `rm`:
+        reference.upload_complete("my uploaded file")
+        
+        # check that it called the rm method of any RemovalService
+        mock_rm.assert_called_with("my uploaded file")
+        
+        # check that it called the rm method of _our_ removal_service
+        removal_service.rm.assert_called_with("my uploaded file")
+     
+
+
+接入一断Python的Decorator示例代码
+
+@f1(arg)
+@f2
+def func(): pass
+
+相当于
+
+def func(): pass
+func = f1(arg)(f2(func))
+
+
+
+
+单元测试的建议：
+    注意代码重构，有注释
+    不要Mock第三方的包。。要是第三方的包改了。。。单元测试是正确的，代码却错了。使用Integration Test吧
+    不能看方法小就不写单元测试喔（用PIT来检查覆盖率吧）
+    不要所有都Mock
+    不要Mock Value Objects（可以写一个工厂方法来生产这些对象）
+
