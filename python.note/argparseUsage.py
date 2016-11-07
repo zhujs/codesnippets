@@ -9,10 +9,15 @@ parser = argparse.ArgumentParser(description='Process some integers.')
 
 # creates an integers attribute in the Namespace object
 # args.integers is a list
+#
+#   metavar: The string shown in the help message
+#   type:    The type of positional arguments
+#   nargs:   Number of positional arguments.
 parser.add_argument('integers', metavar='N', type=int, nargs='+', 
         help='an integer for the accumulator')
 
 # creates a custom "accumulate" attribute in the Namespace object
+#   dest:   The filed name in Namespace object.
 parser.add_argument('--sum', dest='accumulate', action='store_const', 
         const=sum, default=max, help='sum the integers (default: find the max)')
 # store_const: args.accumulate = const = sum
