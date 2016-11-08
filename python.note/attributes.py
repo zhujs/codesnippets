@@ -18,21 +18,25 @@ class NonDataDesc(object):
 	def __get__(self, obj, cls=None):
 		pass
 
-class WithDataDescClass( object ):
+class WithDataDescClass(object):
 	dataDesc = DataDesc()
 	attr1 = "class attr"
 
-class WithNonDataDescClass( object ):
+class WithNonDataDescClass(object):
 	nonDataDesc = NonDataDesc()
 	attr1 = "class attr"
 
 """
 Descriptor是用来定制“访问类或其实例的成员”的一种协议，必须用于类中。
 假设d的类型为DataDesc，obj类型为WithDataDescClass
-    x = obj.d      # 相当于调用了d.__get__(obj, type(obj))
-    x = DataDesc.d # 相当于调用了d.__get__(None,type(obj)) 
-当使用类来引用Descriptor（如DataDesc.d）时，只有__get__会调用（如print DataDesc.d），
-DataDesc.d = "test" 会把Descriptor替换掉（删除操作也一样）
+    # 相当于调用了d.__get__(obj, type(obj))
+    x = obj.d
+
+    # 相当于调用了d.__get__(None,type(obj)) 
+    x = WithDataDescClassData.d
+
+当使用类来引用Descriptor时，只有__get__会调用（如print WithDataDescClass.d），
+WithDataDescClass.d = "test" 会把Descriptor替换掉（删除操作也一样）
 
 
 Data descriptors are useful for providing full control over an attribute.

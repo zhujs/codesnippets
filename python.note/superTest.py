@@ -3,10 +3,9 @@
 """
 在多重继承中，Python使用MRO（Method Resolution Order）来决定
 如何调用父类的方法。
-在type object中，属性__mro__是包含该类型所有父类的tuple。
+在"type object"中，属性__mro__是包含该类型所有父类的tuple。
 super对象相当于利用这个属性找到当前类型的前一个父类，并调用
-父类中的方法
-super对象也可以在类方法中使用
+父类中的方法，super对象也可以在类方法中使用
 """
 class A(object):
     def say_hello(self):
@@ -29,8 +28,8 @@ class D(B, C):
         super(D, self).say_hello()
         print 'D says hello'
 
-B.say_hello()
-D.say_hello()
+# B().say_hello()
+D().say_hello()
 
 """
 super(type)返回一个Descriptor
@@ -39,9 +38,10 @@ class B(A):
         self.__super.do_your_stuff()
         # do stuff with self for B
 
-#Python是如何隐藏开头为双下划线的对象的。。
-B._B__super = super(B) # 此时，B._B__super为一个Descriptor
+# Python是如何隐藏开头为双下划线的对象的。。
+# 此时，B._B__super为一个Descriptor并且是一个bound super boject
+B._B__super = super(B)
 
-# b._B__super = super(B)不能得到bound super object,
-# 记住，Descriptor只能在type object中定义时有效，因此必须在B.__dict__中。
+# b._B__super = super(B)不能得到bound super object, 
+# 因为Descriptor只能在type object中定义时有效，因此必须在B.__dict__中。
 """

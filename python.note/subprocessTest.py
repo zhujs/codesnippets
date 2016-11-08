@@ -9,7 +9,9 @@
 
 import subprocess
 
-# Don't use arguments: stdout=PIPE or stderr=PIPE, because we can not read the output of the pipe (without the Popen object) then child process may block
+# Don't use arguments: stdout=PIPE or stderr=PIPE, 
+# because we can not read the output of the pipe (without the Popen object)
+# then child process may block
 subprocess.call("echo zhu", shell=True)
 
 # subprocess.check_call() # throw a CalledProcessError when exit with non-zero status
