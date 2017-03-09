@@ -1,0 +1,9 @@
+Date:       2017/3/9
+Symptom:    Python脚本中系统库抛出异常
+Cause:      数据不合法
+How found:  执行脚本时出错
+Fix:        使用pdb跟踪脚本，设置断点：b module_name/file_name:line_number
+Fixed in file(s):   
+Caused by me:   Yes
+Time taken to resolve bug:  5 minutes
+Lessons:    Learn to use pdb more efficiently
