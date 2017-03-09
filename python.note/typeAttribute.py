@@ -1,5 +1,6 @@
 # coding: utf-8
 
+# http://www.cafepy.com/article/python_types_and_objects/python_types_and_objects.html
 print """
 Everything is object!! so the 'object' type is an object of type 'type', 'int' is an object of 'type', these are called Type Objects!!! 
 
